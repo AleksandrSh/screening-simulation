@@ -162,58 +162,72 @@ with c1:
     ax.legend()
     st.pyplot(fig)
 
+show_baseline_curve = st.checkbox("Also show FN–FP without pressure", value=False)
+
 with c2:
     st.subheader("FN vs FP Trade-off (Normal vs Overload)")
 
-    # Pick which utilization series to use based on the selector
+    # --- Segmentation uses baseline (no-pressure) utilization so the boundary is stable & stage-dependent
     if "Stage1" in overload_stage:
-        util = df_yes["util1"].to_numpy()
+        util_base = df_no["util1"].to_numpy()
+        stage_label = "Stage1 (CV)"
     elif "Stage2" in overload_stage:
-        util = df_yes["util2"].to_numpy()
+        util_base = df_no["util2"].to_numpy()
+        stage_label = "Stage2 (Tech)"
     else:
-        util = df_yes["util3"].to_numpy()
+        util_base = df_no["util3"].to_numpy()
+        stage_label = "Stage3 (HM)"
 
+    # Always plot the *pressured* outcomes, to show what actually happens after crossing capacity
     fp = df_yes["fp_rate"].to_numpy()
     fn = df_yes["fn_rate"].to_numpy()
 
-    # Masks
-    normal_mask = util <= 1.0
-    over_mask   = util > 1.0
+    normal_mask = util_base <= 1.0
+    over_mask   = util_base > 1.0
 
     fig2, ax2 = plt.subplots(figsize=(6,4))
+    
+    if show_baseline_curve:
+    ax2.plot(
+        df_no["fp_rate"], df_no["fn_rate"],
+        alpha=0.5, linewidth=1.5, linestyle=":",
+        label="FN–FP (no pressure)"
+    )
 
-    # Plot normal and overload points/lines separately
+    # Normal zone: baseline util <= 1
     if normal_mask.any():
-        ax2.plot(fp[normal_mask], fn[normal_mask], label="Normal (u ≤ 1)", linewidth=2)
+        ax2.plot(fp[normal_mask], fn[normal_mask], label="Normal (u ≤ 1, baseline)", linewidth=2)
         ax2.scatter(fp[normal_mask], fn[normal_mask], s=12)
+
+    # Overload zone: baseline util > 1
     if over_mask.any():
-        ax2.plot(fp[over_mask], fn[over_mask], label="Overload (u > 1)", linewidth=2, linestyle="--")
+        ax2.plot(fp[over_mask], fn[over_mask], label="Overload (u > 1, baseline)", linewidth=2, linestyle="--")
         ax2.scatter(fp[over_mask], fn[over_mask], s=12)
 
-    # Dynamic vertical line at first crossing (first index where util > 1)
-    cross_idx = np.argmax(over_mask) if over_mask.any() else None
-    if cross_idx is not None and over_mask.any():
+        # Vertical line at first capacity crossing (baseline)
+        # Find the first index where over_mask is True
+        cross_idx = int(np.argmax(over_mask))  # safe even if first element is True
         x_cross = fp[cross_idx]
-        ax2.axvline(x_cross, linestyle=":", linewidth=2, label="Capacity crossing (u=1)")
+        ax2.axvline(x_cross, linestyle=":", linewidth=2, label="Capacity crossing (baseline u = 1)")
 
-        # Shade overload region on FP axis (from first overload FP to max overload FP)
+        # Shade FP region where baseline indicates overload
         x_min = np.nanmin(fp[over_mask])
         x_max = np.nanmax(fp[over_mask])
         if np.isfinite(x_min) and np.isfinite(x_max):
-            ax2.axvspan(x_min, x_max, alpha=0.12, label="Overload region")
+            ax2.axvspan(x_min, x_max, alpha=0.12, label="Overload region (baseline)")
 
-    # Labels and cosmetics
     ax2.set_xlabel("FP rate")
     ax2.set_ylabel("FN rate")
     ax2.grid(True, alpha=0.3)
     ax2.legend(loc="best")
 
-    # Caption clarifying which stage defines overload
     st.caption(
-        f"Overload defined by **{overload_stage.split(' ')[0]}** utilization. "
-        "Blue = normal; dashed/orange = overload; dotted line = first capacity crossing."
+        "Segmentation uses **baseline (no-pressure)** utilization of "
+        f"{stage_label} to define normal vs overload.\n"
+        "Values plotted are **with pressure** (what actually happens after crossing)."
     )
     st.pyplot(fig2)
+
 
 st.subheader("Stage-level FN and FP (After Pressure)")
 fig3, (ax3, ax4) = plt.subplots(2, 1, figsize=(7,6), sharex=True)
