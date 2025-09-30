@@ -252,11 +252,13 @@ with c2:
     ax2.set_ylabel(ylab)
     ax2.grid(True, alpha=0.3)
     ax2.legend(loc="best")
-    st.caption(
-        f"Segmentation uses **baseline (no-pressure)** utilization of {stage_label} to define normal vs overload. "
-        "Curves/points show **with-pressure** outcomes. Use the selector to view **rates** or **counts**."
-    )
     st.pyplot(fig2)
+
+# Put the explanatory note below both charts so columns align
+st.caption(
+    f"Segmentation uses **baseline (no-pressure)** utilization of {stage_label} to define normal vs overload. "
+    "Curves/points show **with-pressure** outcomes. Use the selector to view **rates** or **counts**."
+)
 
 # --- Chart 3: Stage-level FN and FP (After Pressure)
 st.subheader("Stage-level FN and FP (After Pressure)")
