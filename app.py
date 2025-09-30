@@ -252,17 +252,21 @@ with c2:
     ax2.set_ylabel(ylab)
     ax2.grid(True, alpha=0.3)
     ax2.legend(loc="best")
-
-    with st.expander("ℹ️ How to read this FP/FN Trade-off chart"):
-        st.markdown("""
-        - **X-axis (FP)** shows the number (or rate) of false positives.
-        - **Y-axis (FN)** shows the number (or rate) of false negatives.
-        - As you move left (reducing FP), normally FN should rise — but with capacity pressure,
-          FN can stay low until you hit the capacity limit, after which it shoots up.
-        - The **vertical line** marks the screening capacity threshold.
-        """)
-
     st.pyplot(fig2)
+    
+    # Put the explanation into an expander below the chart
+    with st.expander("ℹ️ How to read this FN–FP Trade-off chart"):
+        st.markdown(
+            f"""
+            - **Segmentation**: Uses **baseline (no-pressure)** utilization of **{stage_label}** to decide
+              whether a point is in the *normal* (u ≤ 1) or *overload* (u > 1) region.
+            - **Curves/points**: Show the **with-pressure** outcomes — i.e., how the actual FP/FN results look
+              once capacity pressure is applied.
+            - **Vertical line**: Marks the first strictness value where baseline utilization exceeds capacity (u = 1).
+            - **Shaded area**: FP values in the overload region.
+            - Use the selector in the sidebar to switch between **rates** and **counts**.
+            """
+        )
 
 # --- Chart 3: Stage-level FN and FP (After Pressure)
 st.subheader("Stage-level FN and FP (After Pressure)")
