@@ -254,13 +254,13 @@ with c2:
     ax2.legend(loc="best")
 
     with st.expander("ℹ️ How to read this FP/FN Trade-off chart"):
-    st.markdown("""
-    - **X-axis (FP)** shows the number (or rate) of false positives.
-    - **Y-axis (FN)** shows the number (or rate) of false negatives.
-    - As you move left (reducing FP), normally FN should rise — but with capacity pressure,
-      FN can stay low until you hit the capacity limit, after which it shoots up.
-    - The **vertical line** marks the screening capacity threshold.
-    """)
+        st.markdown("""
+        - **X-axis (FP)** shows the number (or rate) of false positives.
+        - **Y-axis (FN)** shows the number (or rate) of false negatives.
+        - As you move left (reducing FP), normally FN should rise — but with capacity pressure,
+          FN can stay low until you hit the capacity limit, after which it shoots up.
+        - The **vertical line** marks the screening capacity threshold.
+        """)
 
     st.pyplot(fig2)
 
