@@ -188,11 +188,11 @@ with c2:
     fig2, ax2 = plt.subplots(figsize=(6,4))
     
     if show_baseline_curve:
-    ax2.plot(
-        df_no["fp_rate"], df_no["fn_rate"],
-        alpha=0.5, linewidth=1.5, linestyle=":",
-        label="FN–FP (no pressure)"
-    )
+        ax2.plot(
+            df_no["fp_rate"], df_no["fn_rate"],
+            alpha=0.5, linewidth=1.5, linestyle=":",
+            label="FN–FP (no pressure)"
+        )
 
     # Normal zone: baseline util <= 1
     if normal_mask.any():
@@ -227,7 +227,6 @@ with c2:
         "Values plotted are **with pressure** (what actually happens after crossing)."
     )
     st.pyplot(fig2)
-
 
 st.subheader("Stage-level FN and FP (After Pressure)")
 fig3, (ax3, ax4) = plt.subplots(2, 1, figsize=(7,6), sharex=True)
