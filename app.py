@@ -58,12 +58,12 @@ with st.sidebar:
     use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
     caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 0.8, 0.05)
 
-    # FN–FP chart options
+    # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
     overload_stage = st.selectbox(
         "Overload segmentation stage (for FN–FP chart)",
         ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
-        index=1,  # default Stage2
+        index=1,
     )
     mistake_view = st.radio(
         "Show FN–FP as",
@@ -72,39 +72,20 @@ with st.sidebar:
     )
     show_baseline_curve = st.checkbox("Also show FN–FP without pressure (overlay, rates only)", value=False)
 
-    # Classic per-stage chart options (ignores capacity/pressure)
-    st.subheader("Classic (per-stage) trade-off")
-    classic_stage = st.selectbox(
-        "Stage for classic trade-off (ignores capacity/pressure)",
-        ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
-        index=1
-    )
-    classic_norm = st.radio(
-        "Normalize FN/FP as",
-        [
-            "Rates (FN per good; FP per all)",
-            "Rates (both per all)",
-        ],
-        index=0
-    )
-
 # =========================================================
 # Model Functions
 # =========================================================
-def lerp(a, b, s):  # linear interpolation
+def lerp(a, b, s):
     return (1 - s) * a + s * b
 
 def pressure(util, u_thr, u_max):
-    # 0..1 penalty factor, linear between thresholds, capped
     return max(0.0, min(1.0, (util - u_thr) / max(1e-9, (u_max - u_thr))))
 
 def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k):
     """
-    Return (TPR_s, TNR_s) at strictness s.
-    If use_asym:
-      - TNR follows user intent (len→strict) but never below lenient as s increases.
-      - TPR is penalized as TNR rises: TPR := min(tpr_len, lerp(tpr_len,tpr_str,s) - k * gain),
-        where gain = max(0, TNR - tnr_len). Keeps TPR in [0,1].
+    FP-averse strictness:
+      - TNR rises with strictness (never below lenient).
+      - TPR is capped at lenient and penalized as TNR rises.
     """
     tpr_lin = lerp(tpr_len, tpr_str, s)
     tnr_lin = lerp(tnr_len, tnr_str, s)
@@ -112,10 +93,10 @@ def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k):
     if not use_asym:
         return tpr_lin, tnr_lin
 
-    tnr_s = max(tnr_len, tnr_lin)                 # specificity should not drop with strictness
+    tnr_s = max(tnr_len, tnr_lin)
     gain = max(0.0, tnr_s - tnr_len)
     tpr_penalized = tpr_lin - k * gain
-    tpr_s = min(tpr_len, tpr_penalized)           # don't exceed lenient TPR under strictness
+    tpr_s = min(tpr_len, tpr_penalized)
     tpr_s = max(0.0, min(1.0, tpr_s))
     return tpr_s, tnr_s
 
@@ -136,10 +117,7 @@ def stage1(N, Cap1, p_good, TPR1, TNR1, use_pressure, u_thr, u_max, a_tpr, a_tnr
 
 def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr, u_max, a_tpr, a_tnr):
     seen = min(tot_prev, Cap)
-    if tot_prev > 0:
-        seen_g = seen * (a_g_prev / tot_prev)
-    else:
-        seen_g = 0.0
+    seen_g = seen * (a_g_prev / tot_prev) if tot_prev > 0 else 0.0
     seen_b = seen - seen_g
     util = tot_prev / Cap if Cap > 0 else 99
     pres = pressure(util, u_thr, u_max) if use_pressure else 0.0
@@ -153,7 +131,7 @@ def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr,
     return a_g, a_b, tot, fn, fp, util
 
 def simulate_once(s, with_pressure):
-    # interpolate rates (using asymmetric rule)
+    # interpolate rates (asymmetric rule)
     TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k)
     TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str, use_asym, caution_k)
     TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str, use_asym, caution_k)
@@ -166,7 +144,7 @@ def simulate_once(s, with_pressure):
     a2_g, a2_b, tot2, fn2, fp2, util2 = next_stage(
         tot1, a1_g, a1_b, Cap2, TPR2, TNR2, with_pressure, u_thr, u_max, alpha_tpr, alpha_tnr
     )
-    # Stage 3 (final)
+    # Stage 3
     a3_g, a3_b, tot3, fn3, fp3, util3 = next_stage(
         tot2, a2_g, a2_b, Cap3, TPR3, TNR3, with_pressure, u_thr, u_max, alpha_tpr, alpha_tnr
     )
@@ -187,13 +165,6 @@ def simulate_once(s, with_pressure):
 
 def sweep(with_pressure):
     return pd.DataFrame([simulate_once(float(s), with_pressure) for s in s_values])
-
-def classic_endpoints_for(stage_name):
-    if "Stage1" in stage_name:
-        return (TPR1_len, TPR1_str, TNR1_len, TNR1_str, "Stage1 (CV)")
-    if "Stage2" in stage_name:
-        return (TPR2_len, TPR2_str, TNR2_len, TNR2_str, "Stage2 (Tech)")
-    return (TPR3_len, TPR3_str, TNR3_len, TNR3_str, "Stage3 (HM)")
 
 # =========================================================
 # Run simulations
@@ -231,7 +202,7 @@ with c1:
     ax.legend(loc="best")
     st.pyplot(fig)
 
-# --- Chart 2: FN–FP Trade-off with baseline segmentation and rates/counts toggle
+# --- Chart 2: FN–FP Trade-off (Pipeline) with baseline segmentation & rates/counts toggle
 with c2:
     st.subheader("FN vs FP — Trade-off (Normal vs Overload)")
 
@@ -250,11 +221,11 @@ with c2:
     fp_rate = df_yes["fp_rate"].to_numpy()
     fn_rate = df_yes["fn_rate"].to_numpy()
 
-    # Final-outcome counts
+    # Counts (final outcomes)
     fp_final = df_yes["bad"].to_numpy()
     fn_final = (N * p_good - df_yes["good"]).to_numpy()
 
-    # Sum-of-stage mistakes
+    # Counts (sum of stage mistakes)
     fp_total_stages = (df_yes["FP1"] + df_yes["FP2"] + df_yes["FP3"]).to_numpy()
     fn_total_stages = (df_yes["FN1"] + df_yes["FN2"] + df_yes["FN3"]).to_numpy()
 
@@ -310,68 +281,6 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 - **Segmentation** uses **baseline (no-pressure)** utilization of **{stage_label}** to decide normal (u ≤ 1) vs overload (u > 1).
 - Curves/points show **with-pressure** outcomes for the selected view (rates or counts).
 - The **vertical line** marks the first strictness where baseline utilization exceeds capacity (u = 1); the shaded area is the overload FP region.
-"""
-    )
-
-# =========================================================
-# Classic per-stage FP–FN trade-off (ignores capacity/pressure)
-# =========================================================
-st.subheader("Classic per-stage FP–FN trade-off (ignores capacity/pressure)")
-
-tpr_len, tpr_str, tnr_len, tnr_str, classic_label = classic_endpoints_for(classic_stage)
-
-# Build series using the same asymmetric rule for comparability
-TPR_s = []
-TNR_s = []
-for s in df_no["s"].to_numpy():
-    tpr_s, tnr_s = asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, caution_k)
-    TPR_s.append(tpr_s); TNR_s.append(tnr_s)
-TPR_s = pd.Series(TPR_s)
-TNR_s = pd.Series(TNR_s)
-FPR_s = 1.0 - TNR_s
-
-# Two normalization options
-if classic_norm.startswith("Rates (FN per good; FP per all)"):
-    Xc = (1.0 - p_good) * FPR_s      # FP rate per all
-    Yc = (1.0 - TPR_s)               # FN rate per good
-    xlab_c = "FP rate (per all)"
-    ylab_c = "FN rate (per good)"
-else:
-    Xc = (1.0 - p_good) * FPR_s
-    Yc = p_good * (1.0 - TPR_s)      # FN rate per all
-    xlab_c = "FP rate (per all)"
-    ylab_c = "FN rate (per all)"
-
-figX, axX = plt.subplots(figsize=(7,4))
-axX.plot(Xc, Yc, linewidth=2, label=f"{classic_label} (len→strict), capacity OFF")
-axX.scatter(Xc.iloc[0],  Yc.iloc[0],  s=20, label="Lenient end",  zorder=3)
-axX.scatter(Xc.iloc[-1], Yc.iloc[-1], s=20, label="Strict end",   zorder=3)
-
-# Optional overlay: where the pipeline ends up (with pressure) in the same normalization
-if classic_norm.startswith("Rates (FN per good; FP per all)"):
-    Xp = df_yes["fp_rate"].to_numpy()                        # FP per all
-    Yp = df_yes["fn_rate"].to_numpy()                        # FN per good
-else:
-    Xp = df_yes["bad"].to_numpy() / N                        # FP per all
-    Yp = (N * p_good - df_yes["good"].to_numpy()) / N        # FN per all
-
-axX.plot(Xp, Yp, linestyle="--", alpha=0.7, label="Pipeline (with pressure)")
-axX.scatter(Xp[0],  Yp[0],  s=16)
-axX.scatter(Xp[-1], Yp[-1], s=16)
-
-axX.set_xlabel(xlab_c)
-axX.set_ylabel(ylab_c)
-axX.grid(True, alpha=0.3)
-axX.legend(loc="best")
-st.pyplot(figX)
-
-with st.expander("ℹ️ What this chart is (and isn’t)"):
-    st.markdown(
-        f"""
-- This is a **theoretical, per-stage** FP–FN trade-off curve. It **ignores pipeline capacity and pressure**.
-- We interpolate **TPR/TNR** from your **lenient → strict** endpoints for **{classic_label}**, using the same asymmetric rule.
-- It shows the classic intuition: stricter (FP-averse) tends to **lower FP** (TNR↑) but **raise FN** (TPR capped/↓).
-- For **pipeline reality under capacity/pressure**, see the *FN–FP Trade-off (Normal vs Overload)* above.
 """
     )
 
