@@ -57,6 +57,9 @@ with st.sidebar:
     st.subheader("Asymmetric strictness (FP-averse)")
     use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
     caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 0.8, 0.05)
+    # NEW knobs:
+    caution_gamma = st.slider("Over-cautiousness curvature γ (nonlinear FN cost)", 1.0, 3.0, 1.5, 0.1)
+    max_tpr_drop = st.slider("Max TPR drop allowed from lenient (absolute)", 0.0, 0.9, 0.50, 0.05)
 
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
@@ -81,23 +84,34 @@ def lerp(a, b, s):
 def pressure(util, u_thr, u_max):
     return max(0.0, min(1.0, (util - u_thr) / max(1e-9, (u_max - u_thr))))
 
-def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k):
+def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str,
+                     use_asym: bool, k: float, gamma: float, max_drop: float):
     """
     FP-averse strictness:
       - TNR rises with strictness (never below lenient).
-      - TPR is capped at lenient and penalized as TNR rises.
+      - TPR is capped at lenient and penalized as TNR rises with convexity gamma.
+      - max_drop caps how far TPR can fall below lenient.
     """
-    tpr_lin = lerp(tpr_len, tpr_str, s)
-    tnr_lin = lerp(tnr_len, tnr_str, s)
+    # Linear targets from endpoints
+    tpr_lin = (1 - s) * tpr_len + s * tpr_str
+    tnr_lin = (1 - s) * tnr_len + s * tnr_str
 
     if not use_asym:
         return tpr_lin, tnr_lin
 
+    # Specificity should not drop under stricter screening
     tnr_s = max(tnr_len, tnr_lin)
+
+    # Nonlinear TPR penalty as specificity rises above lenient
     gain = max(0.0, tnr_s - tnr_len)
-    tpr_penalized = tpr_lin - k * gain
-    tpr_s = min(tpr_len, tpr_penalized)
-    tpr_s = max(0.0, min(1.0, tpr_s))
+    penalty = k * (gain ** max(1.0, gamma))
+
+    # Cap above lenient; floor by lenient - max_drop (and 0)
+    tpr_base  = tpr_lin - penalty
+    tpr_cap   = tpr_len
+    tpr_floor = max(0.0, tpr_len - max(0.0, min(1.0, max_drop)))
+    tpr_s = min(tpr_cap, max(tpr_floor, tpr_base))
+
     return tpr_s, tnr_s
 
 def stage1(N, Cap1, p_good, TPR1, TNR1, use_pressure, u_thr, u_max, a_tpr, a_tnr):
@@ -131,10 +145,13 @@ def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr,
     return a_g, a_b, tot, fn, fp, util
 
 def simulate_once(s, with_pressure):
-    # interpolate rates (asymmetric rule)
-    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k)
-    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str, use_asym, caution_k)
-    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str, use_asym, caution_k)
+    # interpolate rates (asymmetric rule with stronger knobs)
+    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str,
+                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
+    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str,
+                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
+    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str,
+                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
 
     # Stage 1
     a1_g, a1_b, tot1, fn1, fp1, util1 = stage1(
