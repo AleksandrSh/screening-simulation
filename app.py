@@ -152,9 +152,9 @@ def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr,
 
 def simulate_once(s, with_pressure):
     # interpolate rates (asymmetric rule)
-    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k)
-    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str, use_asym, caution_k)
-    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str, use_asym, caution_k)
+    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k, caution_gamma, max_tpr_drop)
+    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str, use_asym, caution_k, caution_gamma, max_tpr_drop)
+    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str, use_asym, caution_k, caution_gamma, max_tpr_drop)
 
     # Stage 1
     a1_g, a1_b, tot1, fn1, fp1, util1 = stage1(
