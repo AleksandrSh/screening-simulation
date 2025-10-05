@@ -57,12 +57,6 @@ with st.sidebar:
     st.subheader("Asymmetric strictness (FP-averse)")
     use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
     caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 0.8, 0.05)
-    caution_gamma = st.slider(
-        "Over-cautiousness curvature γ (nonlinear FN cost)", 1.0, 3.0, 1.5, 0.1
-    )
-    max_tpr_drop = st.slider(
-        "Max TPR drop allowed from lenient (absolute)", 0.0, 0.9, 0.50, 0.05
-    )
 
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
@@ -87,37 +81,23 @@ def lerp(a, b, s):
 def pressure(util, u_thr, u_max):
     return max(0.0, min(1.0, (util - u_thr) / max(1e-9, (u_max - u_thr))))
 
-def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k, gamma=1.0, max_drop=0.0):
+def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k):
     """
     FP-averse strictness:
       - TNR rises with strictness (never below lenient).
-      - TPR is capped at the lenient level and penalized as TNR rises.
-      - Penalty grows nonlinearly with curvature γ and is limited by max_drop.
-    Args:
-      k:       penalty scale (α) — bigger => stronger TPR loss per unit TNR gain
-      gamma:   curvature for penalty vs TNR gain (>=1). 1 = linear, >1 = convex (harsher).
-      max_drop: maximum absolute drop allowed from tpr_len (0..1)
+      - TPR is capped at lenient and penalized as TNR rises.
     """
-    # Baseline linear targets (what the user entered)
-    tpr_lin = (1 - s) * tpr_len + s * tpr_str
-    tnr_lin = (1 - s) * tnr_len + s * tnr_str
+    tpr_lin = lerp(tpr_len, tpr_str, s)
+    tnr_lin = lerp(tnr_len, tnr_str, s)
 
     if not use_asym:
         return tpr_lin, tnr_lin
 
-    # 1) Specificity under strictness should not be below lenient
     tnr_s = max(tnr_len, tnr_lin)
-
-    # 2) Compute nonlinear TPR penalty from TNR gain
-    gain = max(0.0, tnr_s - tnr_len)           # how much more specific than lenient
-    penalty = k * (gain ** gamma)               # convex penalty when gamma>1
-
-    # 3) Apply penalty, cap above by lenient, floor by (lenient - max_drop)
-    tpr_base = tpr_lin - penalty
-    tpr_cap  = tpr_len                          # never exceed lenient when stricter
-    tpr_floor = max(0.0, tpr_len - max_drop)    # how low we allow TPR to go
-    tpr_s = min(tpr_cap, max(tpr_floor, tpr_base))
-
+    gain = max(0.0, tnr_s - tnr_len)
+    tpr_penalized = tpr_lin - k * gain
+    tpr_s = min(tpr_len, tpr_penalized)
+    tpr_s = max(0.0, min(1.0, tpr_s))
     return tpr_s, tnr_s
 
 def stage1(N, Cap1, p_good, TPR1, TNR1, use_pressure, u_thr, u_max, a_tpr, a_tnr):
