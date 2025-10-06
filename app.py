@@ -293,6 +293,41 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 # =========================================================
 # NEW: Per-stage FN–FP Trade-offs (Rates or Counts)
 # =========================================================
+def plot_segmented_tradeoff(ax, X, Y, util_base, label_prefix, xlab, ylab):
+    """
+    Draw a segmented FP–FN curve:
+      - util_base: baseline (no-pressure) utilization array for this stage (same length as X/Y)
+      - Normal: u ≤ 1 (solid)
+      - Overload: u > 1 (dashed)
+      - Capacity crossing vertical line + shaded overload band along X
+    """
+    normal_mask = util_base <= 1.0
+    over_mask   = util_base > 1.0
+
+    # Normal
+    if normal_mask.any():
+        ax.plot(X[normal_mask], Y[normal_mask], linewidth=2, label=f"{label_prefix} Normal (u ≤ 1)")
+        ax.scatter(X[normal_mask], Y[normal_mask], s=12)
+
+    # Overload
+    if over_mask.any():
+        ax.plot(X[over_mask], Y[over_mask], linewidth=2, linestyle="--", label=f"{label_prefix} Overload (u > 1)")
+        ax.scatter(X[over_mask], Y[over_mask], s=12)
+
+        # Capacity crossing index = first True in over_mask
+        cross_idx = int(np.argmax(over_mask))
+        ax.axvline(X[cross_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Capacity crossing (u = 1)")
+
+        # Shade overload X range
+        x_min = float(np.nanmin(X[over_mask])); x_max = float(np.nanmax(X[over_mask]))
+        if np.isfinite(x_min) and np.isfinite(x_max) and x_max > x_min:
+            ax.axvspan(x_min, x_max, alpha=0.12, label=f"{label_prefix} Overload region")
+
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best")
+
 st.subheader("Per-stage FN–FP Trade-offs")
 rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True)
 
@@ -311,61 +346,85 @@ def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
 with tabs[0]:
     fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
+    util_base_s1 = df_no["util1"].to_numpy()  # baseline segmentation for CV
+
     if rate_basis.startswith("Stage"):
-        ax_s1.plot(fp_rate_s1, fn_rate_s1, linewidth=2)
-        ax_s1.set_xlabel("FP rate at CV (FP1 / seen1_b)")
-        ax_s1.set_ylabel("FN rate at CV (FN1 / seen1_g)")
+        X, Y = fp_rate_s1, fn_rate_s1
+        xlab = "FP rate at CV (FP1 / seen1_b)"
+        ylab = "FN rate at CV (FN1 / seen1_g)"
     else:
-        ax_s1.plot(FP1, FN1, linewidth=2)
-        ax_s1.set_xlabel("FP count at CV")
-        ax_s1.set_ylabel("FN count at CV")
-    ax_s1.grid(True, alpha=0.3)
+        X, Y = FP1, FN1
+        xlab = "FP count at CV"
+        ylab = "FN count at CV"
+
+    plot_segmented_tradeoff(ax_s1, np.asarray(X), np.asarray(Y), util_base_s1, "CV", xlab, ylab)
     st.pyplot(fig_s1)
 
 with tabs[1]:
     fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
+    util_base_s2 = df_no["util2"].to_numpy()  # baseline segmentation for Tech
+
     if rate_basis.startswith("Stage"):
-        ax_s2.plot(fp_rate_s2, fn_rate_s2, linewidth=2)
-        ax_s2.set_xlabel("FP rate at Tech (FP2 / seen2_b)")
-        ax_s2.set_ylabel("FN rate at Tech (FN2 / seen2_g)")
+        X, Y = fp_rate_s2, fn_rate_s2
+        xlab = "FP rate at Tech (FP2 / seen2_b)"
+        ylab = "FN rate at Tech (FN2 / seen2_g)"
     else:
-        ax_s2.plot(FP2, FN2, linewidth=2)
-        ax_s2.set_xlabel("FP count at Tech")
-        ax_s2.set_ylabel("FN count at Tech")
-    ax_s2.grid(True, alpha=0.3)
+        X, Y = FP2, FN2
+        xlab = "FP count at Tech"
+        ylab = "FN count at Tech"
+
+    plot_segmented_tradeoff(ax_s2, np.asarray(X), np.asarray(Y), util_base_s2, "Tech", xlab, ylab)
     st.pyplot(fig_s2)
 
 with tabs[2]:
     fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
+    util_base_s3 = df_no["util3"].to_numpy()  # baseline segmentation for HM
+
     if rate_basis.startswith("Stage"):
-        ax_s3.plot(fp_rate_s3, fn_rate_s3, linewidth=2)
-        ax_s3.set_xlabel("FP rate at HM (FP3 / seen3_b)")
-        ax_s3.set_ylabel("FN rate at HM (FN3 / seen3_g)")
+        X, Y = fp_rate_s3, fn_rate_s3
+        xlab = "FP rate at HM (FP3 / seen3_b)"
+        ylab = "FN rate at HM (FN3 / seen3_g)"
     else:
-        ax_s3.plot(FP3, FN3, linewidth=2)
-        ax_s3.set_xlabel("FP count at HM")
-        ax_s3.set_ylabel("FN count at HM")
-    ax_s3.grid(True, alpha=0.3)
+        X, Y = FP3, FN3
+        xlab = "FP count at HM"
+        ylab = "FN count at HM"
+
+    plot_segmented_tradeoff(ax_s3, np.asarray(X), np.asarray(Y), util_base_s3, "HM", xlab, ylab)
     st.pyplot(fig_s3)
 
 with tabs[3]:
     fig_sf, ax_sf = plt.subplots(figsize=(6,4))
     FPf = df_yes["bad"].to_numpy()
     FNf = (N * p_good - df_yes["good"]).to_numpy()
+
     if rate_basis.startswith("Stage"):
-        # For final, use population bases
-        fp_rate_f = np.where(N * (1 - p_good) > 0, FPf / (N * (1 - p_good)), 0.0)
-        fn_rate_f = np.where(N * p_good > 0, FNf / (N * p_good), 0.0)
-        ax_sf.plot(fp_rate_f, fn_rate_f, linewidth=2)
-        ax_sf.set_xlabel("Final FP rate (bad / total bad)")
-        ax_sf.set_ylabel("Final FN rate (missed / total good)")
+        # final rates vs population
+        denom_bad  = N * (1 - p_good)
+        denom_good = N * p_good
+        fp_rate_f = np.where(denom_bad  > 0, FPf / denom_bad,  0.0)
+        fn_rate_f = np.where(denom_good > 0, FNf / denom_good, 0.0)
+        X, Y = fp_rate_f, fn_rate_f
+        xlab = "Final FP rate (bad / total bad)"
+        ylab = "Final FN rate (missed / total good)"
     else:
-        ax_sf.plot(FPf, FNf, linewidth=2)
-        ax_sf.set_xlabel("Final FP count (bad hires)")
-        ax_sf.set_ylabel("Final FN count (missed qualified)")
-    ax_sf.grid(True, alpha=0.3)
+        X, Y = FPf, FNf
+        xlab = "Final FP count (bad hires)"
+        ylab = "Final FN count (missed qualified)"
+
+    # choose baseline utilization for segmentation according to overload_stage selector
+    if "Stage1" in overload_stage:
+        util_base_final = df_no["util1"].to_numpy()
+        prefix = "Final vs CV"
+    elif "Stage2" in overload_stage:
+        util_base_final = df_no["util2"].to_numpy()
+        prefix = "Final vs Tech"
+    else:
+        util_base_final = df_no["util3"].to_numpy()
+        prefix = "Final vs HM"
+
+    plot_segmented_tradeoff(ax_sf, np.asarray(X), np.asarray(Y), util_base_final, prefix, xlab, ylab)
     st.pyplot(fig_sf)
 
 # =========================================================
