@@ -329,40 +329,49 @@ st.dataframe(df_yes.round(4))
 with st.expander("🛠️ Developer Debug View: Effective TPR/TNR curves"):
     fig_dbg, ax_dbg = plt.subplots(figsize=(7,4))
 
-    # Raw linear interpolations
+    # Raw linear interpolations for Stage 1 endpoints
     tpr1_raw = [lerp(TPR1_len, TPR1_str, s) for s in s_values]
     tnr1_raw = [lerp(TNR1_len, TNR1_str, s) for s in s_values]
 
-    # After asymmetric penalty
-    tpr1_asym, tnr1_asym = zip(*[
-        asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k)
-        for s in s_values
-    ])
+    # After asymmetric penalty (PASS gamma and max_drop!)
+    tpr1_asym_list = []
+    tnr1_asym_list = []
+    for s in s_values:
+        tpr_s, tnr_s = asymmetric_rates(
+            s,
+            TPR1_len, TPR1_str,
+            TNR1_len, TNR1_str,
+            use_asym, caution_k,
+            caution_gamma, max_tpr_drop   # <-- new args
+        )
+        tpr1_asym_list.append(tpr_s)
+        tnr1_asym_list.append(tnr_s)
 
-    # After capacity pressure (apply at Stage1 util)
+    # After capacity pressure (use Stage 1 utilization from the WITH-pressure run)
     util_stage1 = df_yes["util1"].to_numpy()
     pres_vals = [pressure(u, u_thr, u_max) if use_pressure else 0.0 for u in util_stage1]
-    tpr1_final = [t * (1 - alpha_tpr * p) for t, p in zip(tpr1_asym, pres_vals)]
-    tnr1_final = [t * (1 - alpha_tnr * p) for t, p in zip(tnr1_asym, pres_vals)]
 
-    ax_dbg.plot(s_values, tpr1_raw, label="TPR (raw)", linestyle="--", color="blue")
-    ax_dbg.plot(s_values, tnr1_raw, label="TNR (raw)", linestyle="--", color="green")
-    ax_dbg.plot(s_values, tpr1_asym, label="TPR (asym)", color="blue")
-    ax_dbg.plot(s_values, tnr1_asym, label="TNR (asym)", color="green")
-    ax_dbg.plot(s_values, tpr1_final, label="TPR (final, w/ pressure)", color="blue", linewidth=2)
-    ax_dbg.plot(s_values, tnr1_final, label="TNR (final, w/ pressure)", color="green", linewidth=2)
+    # Make sure lengths match s_values (they should)
+    tpr1_final = [t * (1 - alpha_tpr * p) for t, p in zip(tpr1_asym_list, pres_vals)]
+    tnr1_final = [t * (1 - alpha_tnr * p) for t, p in zip(tnr1_asym_list, pres_vals)]
+
+    ax_dbg.plot(s_values, tpr1_raw,  label="TPR (raw)",  linestyle="--")
+    ax_dbg.plot(s_values, tnr1_raw,  label="TNR (raw)",  linestyle="--")
+    ax_dbg.plot(s_values, tpr1_asym_list, label="TPR (asym)")
+    ax_dbg.plot(s_values, tnr1_asym_list, label="TNR (asym)")
+    ax_dbg.plot(s_values, tpr1_final, label="TPR (final, w/ pressure)", linewidth=2)
+    ax_dbg.plot(s_values, tnr1_final, label="TNR (final, w/ pressure)", linewidth=2)
 
     ax_dbg.set_xlabel("Strictness s")
     ax_dbg.set_ylabel("Rate")
-    ax_dbg.set_ylim(0,1)
+    ax_dbg.set_ylim(0, 1)
     ax_dbg.grid(True, alpha=0.3)
     ax_dbg.legend(loc="best")
-
     st.pyplot(fig_dbg)
 
     st.markdown("""
-    **How to read this debug chart:**
-    - **Raw**: simple linear interpolation between lenient and strict endpoints.
-    - **Asym**: after applying FP-averse strictness (TPR penalized as TNR rises).
-    - **Final**: after also applying capacity-pressure degradation (depends on utilization).
-    """)
+**How to read this debug chart:**
+- **Raw** = linear interpolation between lenient and strict endpoints.
+- **Asym** = after applying FP-averse strictness (TPR penalized as TNR rises).
+- **Final** = after also applying capacity-pressure erosion (depends on utilization).
+""")
