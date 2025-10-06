@@ -57,9 +57,6 @@ with st.sidebar:
     st.subheader("Asymmetric strictness (FP-averse)")
     use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
     caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 0.8, 0.05)
-    # NEW knobs:
-    caution_gamma = st.slider("Over-cautiousness curvature γ (nonlinear FN cost)", 1.0, 3.0, 1.5, 0.1)
-    max_tpr_drop = st.slider("Max TPR drop allowed from lenient (absolute)", 0.0, 0.9, 0.50, 0.05)
 
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
@@ -84,34 +81,23 @@ def lerp(a, b, s):
 def pressure(util, u_thr, u_max):
     return max(0.0, min(1.0, (util - u_thr) / max(1e-9, (u_max - u_thr))))
 
-def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str,
-                     use_asym: bool, k: float, gamma: float, max_drop: float):
+def asymmetric_rates(s, tpr_len, tpr_str, tnr_len, tnr_str, use_asym, k):
     """
     FP-averse strictness:
       - TNR rises with strictness (never below lenient).
-      - TPR is capped at lenient and penalized as TNR rises with convexity gamma.
-      - max_drop caps how far TPR can fall below lenient.
+      - TPR is capped at lenient and penalized as TNR rises.
     """
-    # Linear targets from endpoints
-    tpr_lin = (1 - s) * tpr_len + s * tpr_str
-    tnr_lin = (1 - s) * tnr_len + s * tnr_str
+    tpr_lin = lerp(tpr_len, tpr_str, s)
+    tnr_lin = lerp(tnr_len, tnr_str, s)
 
     if not use_asym:
         return tpr_lin, tnr_lin
 
-    # Specificity should not drop under stricter screening
     tnr_s = max(tnr_len, tnr_lin)
-
-    # Nonlinear TPR penalty as specificity rises above lenient
     gain = max(0.0, tnr_s - tnr_len)
-    penalty = k * (gain ** max(1.0, gamma))
-
-    # Cap above lenient; floor by lenient - max_drop (and 0)
-    tpr_base  = tpr_lin - penalty
-    tpr_cap   = tpr_len
-    tpr_floor = max(0.0, tpr_len - max(0.0, min(1.0, max_drop)))
-    tpr_s = min(tpr_cap, max(tpr_floor, tpr_base))
-
+    tpr_penalized = tpr_lin - k * gain
+    tpr_s = min(tpr_len, tpr_penalized)
+    tpr_s = max(0.0, min(1.0, tpr_s))
     return tpr_s, tnr_s
 
 def stage1(N, Cap1, p_good, TPR1, TNR1, use_pressure, u_thr, u_max, a_tpr, a_tnr):
@@ -127,7 +113,7 @@ def stage1(N, Cap1, p_good, TPR1, TNR1, use_pressure, u_thr, u_max, a_tpr, a_tnr
     tot = a_g + a_b
     fn = seen_g - a_g
     fp = a_b
-    return a_g, a_b, tot, fn, fp, util
+    return a_g, a_b, tot, fn, fp, util, seen, seen_g, seen_b
 
 def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr, u_max, a_tpr, a_tnr):
     seen = min(tot_prev, Cap)
@@ -142,27 +128,24 @@ def next_stage(tot_prev, a_g_prev, a_b_prev, Cap, TPR, TNR, use_pressure, u_thr,
     tot = a_g + a_b
     fn = seen_g - a_g
     fp = a_b
-    return a_g, a_b, tot, fn, fp, util
+    return a_g, a_b, tot, fn, fp, util, seen, seen_g, seen_b
 
 def simulate_once(s, with_pressure):
-    # interpolate rates (asymmetric rule with stronger knobs)
-    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str,
-                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
-    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str,
-                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
-    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str,
-                                  use_asym, caution_k, caution_gamma, max_tpr_drop)
+    # interpolate rates (asymmetric rule)
+    TPR1, TNR1 = asymmetric_rates(s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k)
+    TPR2, TNR2 = asymmetric_rates(s, TPR2_len, TPR2_str, TNR2_len, TNR2_str, use_asym, caution_k)
+    TPR3, TNR3 = asymmetric_rates(s, TPR3_len, TPR3_str, TNR3_len, TNR3_str, use_asym, caution_k)
 
     # Stage 1
-    a1_g, a1_b, tot1, fn1, fp1, util1 = stage1(
+    a1_g, a1_b, tot1, fn1, fp1, util1, seen1, seen1_g, seen1_b = stage1(
         N, Cap1, p_good, TPR1, TNR1, with_pressure, u_thr, u_max, alpha_tpr, alpha_tnr
     )
     # Stage 2
-    a2_g, a2_b, tot2, fn2, fp2, util2 = next_stage(
+    a2_g, a2_b, tot2, fn2, fp2, util2, seen2, seen2_g, seen2_b = next_stage(
         tot1, a1_g, a1_b, Cap2, TPR2, TNR2, with_pressure, u_thr, u_max, alpha_tpr, alpha_tnr
     )
     # Stage 3
-    a3_g, a3_b, tot3, fn3, fp3, util3 = next_stage(
+    a3_g, a3_b, tot3, fn3, fp3, util3, seen3, seen3_g, seen3_b = next_stage(
         tot2, a2_g, a2_b, Cap3, TPR3, TNR3, with_pressure, u_thr, u_max, alpha_tpr, alpha_tnr
     )
 
@@ -176,8 +159,14 @@ def simulate_once(s, with_pressure):
     return {
         "s": s, "good": good, "bad": bad, "total": total,
         "precision": precision, "fp_rate": fp_rate, "fn_rate": fn_rate,
+        # stage mistakes
         "FN1": fn1, "FP1": fp1, "FN2": fn2, "FP2": fp2, "FN3": fn3, "FP3": fp3,
-        "util1": util1, "util2": util2, "util3": util3
+        # stage utilization
+        "util1": util1, "util2": util2, "util3": util3,
+        # stage seen bases
+        "seen1": seen1, "seen1_g": seen1_g, "seen1_b": seen1_b,
+        "seen2": seen2, "seen2_g": seen2_g, "seen2_b": seen2_b,
+        "seen3": seen3, "seen3_g": seen3_g, "seen3_b": seen3_b,
     }
 
 def sweep(with_pressure):
@@ -302,6 +291,84 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
     )
 
 # =========================================================
+# NEW: Per-stage FN–FP Trade-offs (Rates or Counts)
+# =========================================================
+st.subheader("Per-stage FN–FP Trade-offs")
+rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True)
+
+tabs = st.tabs(["CV (Stage1)", "Tech (Stage2)", "HM (Stage3)", "Final"])
+
+def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
+    seen_g = df[seen_g_col].to_numpy()
+    seen_b = df[seen_b_col].to_numpy()
+    FN = df[FN_col].to_numpy()
+    FP = df[FP_col].to_numpy()
+    # Avoid divide-by-zero
+    fn_rate = np.where(seen_g > 0, FN / seen_g, 0.0)
+    fp_rate = np.where(seen_b > 0, FP / seen_b, 0.0)
+    return fp_rate, fn_rate, FP, FN
+
+with tabs[0]:
+    fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
+    fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
+    if rate_basis.startswith("Stage"):
+        ax_s1.plot(fp_rate_s1, fn_rate_s1, linewidth=2)
+        ax_s1.set_xlabel("FP rate at CV (FP1 / seen1_b)")
+        ax_s1.set_ylabel("FN rate at CV (FN1 / seen1_g)")
+    else:
+        ax_s1.plot(FP1, FN1, linewidth=2)
+        ax_s1.set_xlabel("FP count at CV")
+        ax_s1.set_ylabel("FN count at CV")
+    ax_s1.grid(True, alpha=0.3)
+    st.pyplot(fig_s1)
+
+with tabs[1]:
+    fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
+    fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
+    if rate_basis.startswith("Stage"):
+        ax_s2.plot(fp_rate_s2, fn_rate_s2, linewidth=2)
+        ax_s2.set_xlabel("FP rate at Tech (FP2 / seen2_b)")
+        ax_s2.set_ylabel("FN rate at Tech (FN2 / seen2_g)")
+    else:
+        ax_s2.plot(FP2, FN2, linewidth=2)
+        ax_s2.set_xlabel("FP count at Tech")
+        ax_s2.set_ylabel("FN count at Tech")
+    ax_s2.grid(True, alpha=0.3)
+    st.pyplot(fig_s2)
+
+with tabs[2]:
+    fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
+    fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
+    if rate_basis.startswith("Stage"):
+        ax_s3.plot(fp_rate_s3, fn_rate_s3, linewidth=2)
+        ax_s3.set_xlabel("FP rate at HM (FP3 / seen3_b)")
+        ax_s3.set_ylabel("FN rate at HM (FN3 / seen3_g)")
+    else:
+        ax_s3.plot(FP3, FN3, linewidth=2)
+        ax_s3.set_xlabel("FP count at HM")
+        ax_s3.set_ylabel("FN count at HM")
+    ax_s3.grid(True, alpha=0.3)
+    st.pyplot(fig_s3)
+
+with tabs[3]:
+    fig_sf, ax_sf = plt.subplots(figsize=(6,4))
+    FPf = df_yes["bad"].to_numpy()
+    FNf = (N * p_good - df_yes["good"]).to_numpy()
+    if rate_basis.startswith("Stage"):
+        # For final, use population bases
+        fp_rate_f = np.where(N * (1 - p_good) > 0, FPf / (N * (1 - p_good)), 0.0)
+        fn_rate_f = np.where(N * p_good > 0, FNf / (N * p_good), 0.0)
+        ax_sf.plot(fp_rate_f, fn_rate_f, linewidth=2)
+        ax_sf.set_xlabel("Final FP rate (bad / total bad)")
+        ax_sf.set_ylabel("Final FN rate (missed / total good)")
+    else:
+        ax_sf.plot(FPf, FNf, linewidth=2)
+        ax_sf.set_xlabel("Final FP count (bad hires)")
+        ax_sf.set_ylabel("Final FN count (missed qualified)")
+    ax_sf.grid(True, alpha=0.3)
+    st.pyplot(fig_sf)
+
+# =========================================================
 # Stage-level FN and FP (After Pressure)
 # =========================================================
 st.subheader("Stage-level FN and FP (After Pressure)")
@@ -320,11 +387,9 @@ ax4.grid(True, alpha=0.3)
 st.pyplot(fig3)
 
 st.divider()
-st.subheader("Raw data (After Pressure)")
-st.dataframe(df_yes.round(4))
 
 # =========================================================
-# Developer Debug View (optional)
+# Developer Debug View (optional) — keep as-is but compatible with your signature
 # =========================================================
 with st.expander("🛠️ Developer Debug View: Effective TPR/TNR curves"):
     fig_dbg, ax_dbg = plt.subplots(figsize=(7,4))
@@ -333,16 +398,12 @@ with st.expander("🛠️ Developer Debug View: Effective TPR/TNR curves"):
     tpr1_raw = [lerp(TPR1_len, TPR1_str, s) for s in s_values]
     tnr1_raw = [lerp(TNR1_len, TNR1_str, s) for s in s_values]
 
-    # After asymmetric penalty (PASS gamma and max_drop!)
+    # After asymmetric penalty
     tpr1_asym_list = []
     tnr1_asym_list = []
     for s in s_values:
         tpr_s, tnr_s = asymmetric_rates(
-            s,
-            TPR1_len, TPR1_str,
-            TNR1_len, TNR1_str,
-            use_asym, caution_k,
-            caution_gamma, max_tpr_drop   # <-- new args
+            s, TPR1_len, TPR1_str, TNR1_len, TNR1_str, use_asym, caution_k
         )
         tpr1_asym_list.append(tpr_s)
         tnr1_asym_list.append(tnr_s)
@@ -351,7 +412,6 @@ with st.expander("🛠️ Developer Debug View: Effective TPR/TNR curves"):
     util_stage1 = df_yes["util1"].to_numpy()
     pres_vals = [pressure(u, u_thr, u_max) if use_pressure else 0.0 for u in util_stage1]
 
-    # Make sure lengths match s_values (they should)
     tpr1_final = [t * (1 - alpha_tpr * p) for t, p in zip(tpr1_asym_list, pres_vals)]
     tnr1_final = [t * (1 - alpha_tnr * p) for t, p in zip(tnr1_asym_list, pres_vals)]
 
@@ -375,3 +435,6 @@ with st.expander("🛠️ Developer Debug View: Effective TPR/TNR curves"):
 - **Asym** = after applying FP-averse strictness (TPR penalized as TNR rises).
 - **Final** = after also applying capacity-pressure erosion (depends on utilization).
 """)
+
+st.subheader("Raw data (After Pressure)")
+st.dataframe(df_yes.round(4))
