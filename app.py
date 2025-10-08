@@ -331,6 +331,42 @@ def plot_segmented_tradeoff(ax, X, Y, util_base, label_prefix, xlab, ylab):
 st.subheader("Per-stage FN–FP Trade-offs")
 rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True)
 
+def plot_segmented_tradeoff(ax, X, Y, util_base, label_prefix, xlab, ylab):
+    """
+    Draw a segmented FP–FN curve:
+      - util_base: baseline (no-pressure) utilization array for this stage (same length as X/Y)
+      - Normal: u ≤ 1 (solid)
+      - Overload: u > 1 (dashed)
+      - Capacity crossing vertical line + shaded overload band along X
+    """
+    normal_mask = util_base <= 1.0
+    over_mask   = util_base > 1.0
+
+    # Normal
+    if normal_mask.any():
+        ax.plot(X[normal_mask], Y[normal_mask], linewidth=2, label=f"{label_prefix} Normal (u ≤ 1)")
+        ax.scatter(X[normal_mask], Y[normal_mask], s=12)
+
+    # Overload
+    if over_mask.any():
+        ax.plot(X[over_mask], Y[over_mask], linewidth=2, linestyle="--", label=f"{label_prefix} Overload (u > 1)")
+        ax.scatter(X[over_mask], Y[over_mask], s=12)
+
+        # Capacity crossing index = first True in over_mask
+        cross_idx = int(np.argmax(over_mask))
+        ax.axvline(X[cross_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Capacity crossing (u = 1)")
+
+        # Shade overload X range
+        x_min = float(np.nanmin(X[over_mask])); x_max = float(np.nanmax(X[over_mask]))
+        if np.isfinite(x_min) and np.isfinite(x_max) and x_max > x_min:
+            ax.axvspan(x_min, x_max, alpha=0.12, label=f"{label_prefix} Overload region")
+
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best")
+
+
 tabs = st.tabs(["CV (Stage1)", "Tech (Stage2)", "HM (Stage3)", "Final"])
 
 def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
