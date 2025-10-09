@@ -9,7 +9,7 @@ st.set_page_config(page_title="Screening Simulation", layout="wide")
 # =========================================================
 # Sidebar Controls
 # =========================================================
-st.title("Screening Simulation")
+st.title("Candidates Screening Simulation")
 st.caption("Capacity-first pipeline with asymmetric strictness and capacity-pressure effects")
 
 with st.sidebar:
@@ -56,7 +56,7 @@ with st.sidebar:
     # Asymmetric strictness (FP-averse)
     st.subheader("Asymmetric strictness (FP-averse)")
     use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
-    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 0.8, 0.05)
+    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 1.60, 0.05)
 
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
@@ -606,12 +606,12 @@ with tabs[2]:
 
 with tabs[3]:
     st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
-    total_processedf = N
+    total_intake = N
     true_positivesf = df_yes["good"].iloc[-1]
     false_positivesf = df_yes["bad"].iloc[-1]
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total processed (Final stage)", f"{total_processedf:.0f}")
+        st.metric("Total Intake", f"{total_intake:.0f}")
     with col2:
         st.metric("True Positives (final)", f"{true_positivesf:.0f}")
     with col3:
