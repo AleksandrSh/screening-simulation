@@ -65,15 +65,8 @@ with st.sidebar:
         ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
         index=1,
     )
-    mistake_view = st.radio(
-        "Show FN–FP as",
-        ["Rates", "Counts (final outcome)", "Counts (sum of stage mistakes)"],
-        index=0
-    )
-    show_baseline_curve = st.checkbox("Also show FN–FP without pressure (overlay, rates only)", value=False)
-    
     show_baseline_markers = st.sidebar.checkbox(
-    "Show faint baseline markers (u_base)", value=False
+        "Show faint baseline markers (u_base)", value=False
     )
 
 # =========================================================
@@ -185,6 +178,7 @@ df_yes = sweep(True) if use_pressure else df_no.copy()  # outcomes shown
 # =========================================================
 # KPIs
 # =========================================================
+st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
 k1,k2,k3,k4 = st.columns(4)
 with k1: st.metric("Good hires (s end, with pressure)", f"{df_yes['good'].iloc[-1]:.1f}")
 with k2: st.metric("Bad hires (s end, with pressure)",  f"{df_yes['bad'].iloc[-1]:.1f}")
@@ -196,103 +190,20 @@ st.divider()
 # =========================================================
 # Charts (two columns)
 # =========================================================
-c1, c2 = st.columns(2)
-
-# --- Chart 1: Good & Bad Hires — Before vs After Pressure
-with c1:
-    st.subheader("Good & Bad Hires — Before vs After Pressure")
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(df_no["s"],  df_no["good"], label="Good (Before)", linestyle="--")
-    ax.plot(df_no["s"],  df_no["bad"],  label="Bad (Before)", linestyle="--")
-    ax.plot(df_yes["s"], df_yes["good"], label="Good (After)", linewidth=2)
-    ax.plot(df_yes["s"], df_yes["bad"],  label="Bad (After)",  linewidth=2)
-    ax.set_xlabel("Strictness s")
-    ax.set_ylabel("Hires")
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best")
-    st.pyplot(fig)
-
-# --- Chart 2: FN–FP Trade-off (Pipeline) with baseline segmentation & rates/counts toggle
-with c2:
-    st.subheader("FN vs FP — Trade-off (Normal vs Overload)")
-
-    # Baseline (no-pressure) utilization used only for segmentation
-    if "Stage1" in overload_stage:
-        util_base = df_no["util1"].to_numpy()
-        stage_label = "Stage1 (CV)"
-    elif "Stage2" in overload_stage:
-        util_base = df_no["util2"].to_numpy()
-        stage_label = "Stage2 (Tech)"
-    else:
-        util_base = df_no["util3"].to_numpy()
-        stage_label = "Stage3 (HM)"
-
-    # Values to plot (always with pressure)
-    fp_rate = df_yes["fp_rate"].to_numpy()
-    fn_rate = df_yes["fn_rate"].to_numpy()
-
-    # Counts (final outcomes)
-    fp_final = df_yes["bad"].to_numpy()
-    fn_final = (N * p_good - df_yes["good"]).to_numpy()
-
-    # Counts (sum of stage mistakes)
-    fp_total_stages = (df_yes["FP1"] + df_yes["FP2"] + df_yes["FP3"]).to_numpy()
-    fn_total_stages = (df_yes["FN1"] + df_yes["FN2"] + df_yes["FN3"]).to_numpy()
-
-    if mistake_view == "Rates":
-        X = fp_rate; Y = fn_rate; xlab = "FP rate"; ylab = "FN rate"
-    elif mistake_view == "Counts (final outcome)":
-        X = fp_final; Y = fn_final; xlab = "False Positives (bad hires)"; ylab = "False Negatives (missed qualified)"
-    else:
-        X = fp_total_stages; Y = fn_total_stages; xlab = "Total FP mistakes (all stages)"; ylab = "Total FN mistakes (all stages)"
-
-    normal_mask = util_base <= 1.0
-    over_mask   = util_base > 1.0
-
-    fig2, ax2 = plt.subplots(figsize=(6,4))
-
-    # Optional overlay: baseline (no-pressure) FN–FP curve (only for Rates)
-    if mistake_view == "Rates" and show_baseline_curve:
-        ax2.plot(
-            df_no["fp_rate"], df_no["fn_rate"],
-            alpha=0.5, linewidth=1.5, linestyle=":",
-            label="FN–FP (no pressure)"
-        )
-
-    # Normal region (baseline u<=1)
-    if normal_mask.any():
-        ax2.plot(X[normal_mask], Y[normal_mask], label="Normal (u ≤ 1, baseline)", linewidth=2)
-        ax2.scatter(X[normal_mask], Y[normal_mask], s=12)
-
-    # Overload region (baseline u>1)
-    if over_mask.any():
-        ax2.plot(X[over_mask], Y[over_mask], label="Overload (u > 1, baseline)", linewidth=2, linestyle="--")
-        ax2.scatter(X[over_mask], Y[over_mask], s=12)
-
-        # Capacity crossing (first index where baseline util>1)
-        cross_idx = int(np.argmax(over_mask))
-        ax2.axvline(X[cross_idx], linestyle=":", linewidth=2, label="Capacity crossing (baseline u = 1)")
-
-        # Shade overload range on X
-        x_min = float(np.nanmin(X[over_mask])); x_max = float(np.nanmax(X[over_mask]))
-        if np.isfinite(x_min) and np.isfinite(x_max) and x_max > x_min:
-            ax2.axvspan(x_min, x_max, alpha=0.12, label="Overload region (baseline)")
-
-    ax2.set_xlabel(xlab)
-    ax2.set_ylabel(ylab)
-    ax2.grid(True, alpha=0.3)
-    ax2.legend(loc="best")
-    st.pyplot(fig2)
-
-# Keep the page aligned: put the explanation below the two-column block
-with st.expander("ℹ️ How to read the FN–FP chart"):
-    st.markdown(
-        f"""
-- **Segmentation** uses **baseline (no-pressure)** utilization of **{stage_label}** to decide normal (u ≤ 1) vs overload (u > 1).
-- Curves/points show **with-pressure** outcomes for the selected view (rates or counts).
-- The **vertical line** marks the first strictness where baseline utilization exceeds capacity (u = 1); the shaded area is the overload FP region.
-"""
-    )
+st.subheader("Good & Bad Hires — Before vs After Pressure")
+fig, ax = plt.subplots(figsize=(10,5))
+# Always plot 'Before' lines with consistent style and color
+ax.plot(df_no["s"],  df_no["good"], label="Good (Before)", linestyle="--", color="#1f77b4")
+ax.plot(df_no["s"],  df_no["bad"],  label="Bad (Before)", linestyle="--", color="#d62728")
+# Only plot 'After' lines if pressure is enabled
+if use_pressure:
+    ax.plot(df_yes["s"], df_yes["good"], label="Good (After)", linewidth=2, color="#1f77b4")
+    ax.plot(df_yes["s"], df_yes["bad"],  label="Bad (After)",  linewidth=2, color="#d62728")
+ax.set_xlabel("Strictness s")
+ax.set_ylabel("Hires")
+ax.grid(True, alpha=0.3)
+ax.legend(loc="best")
+st.pyplot(fig)
 
 # =========================================================
 # NEW: Per-stage FN–FP Trade-offs (Rates or Counts)
@@ -396,8 +307,6 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 #     xlab, ylab
 # ):
 
-# ========
-
 #     X = np.asarray(X); Y = np.asarray(Y)
 #     u_base = np.asarray(util_base)
 #     u_act  = np.asarray(util_actual)
@@ -462,76 +371,77 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 #     ax.grid(True, alpha=0.3)
 #     ax.legend(loc="best")
 
-def zones_actual(u, u_thr, eps=1e-12):
-    pre  = (u <= u_thr + eps)
-    soft = (u >  u_thr + eps) & (u <= 1.0 + eps)
-    hard = (u >  1.0 + eps)
-    return pre, soft, hard
+def plot_tradeoff_actual(
+    ax, X, Y,
+    util_act,            # with-pressure utilization for this stage (df_yes["util*"])
+    u_thr,
+    label_prefix,
+    xlab, ylab,
+    # optional faint markers for baseline reference
+    util_base=None,      # df_no["util*"] for the same stage (optional)
+    show_base=False,
+):
+    """
+    Segments the curve using ACTUAL utilization (consistent with current settings):
+      - Pre-pressure: u_act ≤ u_thr          (solid)
+      - Soft overload: u_thr < u_act ≤ 1     (dash-dot)
+      - Hard overload: u_act > 1             (dashed)
+    Optionally draws faint baseline (no-pressure) vertical markers for reference.
+    """
 
-def crossings_s(s, u, thr, eps=1e-12):
-    """Return (found, s_cross) where u first crosses thr from below (linear in s)."""
-    s = np.asarray(s); u = np.asarray(u)
-    above = u > thr + eps
-    if not np.any(above):
-        return False, None
-    i1 = int(np.argmax(above))
-    if i1 == 0:
-        return True, float(s[0])
-    i0 = i1 - 1
-    du = u[i1] - u[i0]
-    if abs(du) < eps:
-        return True, float(s[i1])
-    t = (thr - u[i0]) / du
-    return True, float(s[i0] + t * (s[i1] - s[i0]))
+    X = np.asarray(X); Y = np.asarray(Y)
+    u = np.asarray(util_act)
 
-def plot_fp_fn_scatter(ax, X, Y, u_act, u_thr, label_prefix, xlab, ylab):
-    X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(u_act)
-    pre, soft, hard = zones_actual(u, u_thr)
+    pre_mask  = (u <= u_thr)
+    soft_mask = (u > u_thr) & (u <= 1.0)
+    hard_mask = (u > 1.0)
 
-    # connect all points (thin line) just to show the path
-    ax.plot(X, Y, lw=1, alpha=0.5, color="gray")
+    # --- Draw by actual masks
+    if pre_mask.any():
+        ax.plot(X[pre_mask], Y[pre_mask], lw=2, label=f"{label_prefix} Pre-pressure")
+        ax.scatter(X[pre_mask], Y[pre_mask], s=12)
 
-    if pre.any():
-        ax.scatter(X[pre],  Y[pre],  s=18, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
-    if soft.any():
-        ax.scatter(X[soft], Y[soft], s=22, marker="s", label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
-    if hard.any():
-        ax.scatter(X[hard], Y[hard], s=26, marker="^", label=f"{label_prefix} Hard overload (u > 1)")
+    if soft_mask.any():
+        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
+                label=f"{label_prefix} Soft overload")
+        ax.scatter(X[soft_mask], Y[soft_mask], s=12)
+        xs, xe = float(np.nanmin(X[soft_mask])), float(np.nanmax(X[soft_mask]))
+        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+            ax.axvspan(xs, xe, alpha=0.10, color="#cccccc", label=f"{label_prefix} Soft overload")
+
+    if hard_mask.any():
+        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
+                label=f"{label_prefix} Hard overload")
+        ax.scatter(X[hard_mask], Y[hard_mask], s=12)
+        xs, xe = float(np.nanmin(X[hard_mask])), float(np.nanmax(X[hard_mask]))
+        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+            ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload")
+
+    # # --- Actual vertical guides (first occurrences)
+    # if soft_mask.any():
+    #     i_thr_act = int(np.argmax(soft_mask))         # first point with u_act > u_thr
+    #     ax.axvline(X[i_thr_act], ls="-.", lw=1.8, alpha=0.7,
+    #                label=f"{label_prefix} Penalty onset (actual u = u_thr)")
+    # if hard_mask.any():
+    #     i_cap_act = int(np.argmax(hard_mask))         # first point with u_act > 1
+    #     ax.axvline(X[i_cap_act], ls="-.", lw=1.8, alpha=0.7,
+    #                label=f"{label_prefix} Capacity crossed (actual u = 1)")
+
+    # --- Optional: faint baseline markers for reference only
+    if show_base and (util_base is not None):
+        u0 = np.asarray(util_base)
+        soft0 = (u0 > u_thr) & (u0 <= 1.0)
+        hard0 = (u0 > 1.0)
+        if soft0.any():
+            i_thr_base = int(np.argmax(soft0))
+            ax.axvline(X[i_thr_base], ls=":", lw=1.4, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = u_thr")
+        if hard0.any():
+            i_cap_base = int(np.argmax(hard0))
+            ax.axvline(X[i_cap_base], ls=":", lw=1.4, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = 1")
 
     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
-    ax.grid(True, alpha=0.3); ax.legend(loc="best")
-
-def plot_fp_fn_vs_s(ax, s_vals, fp_series, fn_series, u_act, u_thr, label_prefix, mode_label):
-    s  = np.asarray(s_vals)
-    FP = np.asarray(fp_series)
-    FN = np.asarray(fn_series)
-    u  = np.asarray(u_act)
-
-    pre, soft, hard = zones_actual(u, u_thr)
-    f_thr, s_thr = crossings_s(s, u, u_thr)
-    f_cap, s_cap = crossings_s(s, u, 1.0)
-
-    # Shade zones on the s-axis (this is robust because s is monotonic)
-    if f_thr:
-        ax.axvline(s_thr, ls="--", lw=1.5, alpha=0.8, label="Penalty onset (u = u_thr)")
-    if f_cap:
-        ax.axvline(s_cap, ls="--", lw=1.5, alpha=0.8, label="Capacity crossed (u = 1)")
-
-    # Soft overload band: [s_thr, s_cap) or [s_thr, s_end] if no cap
-    if f_thr:
-        s_soft_end = s_cap if f_cap else s[-1]
-        ax.axvspan(s_thr, s_soft_end, alpha=0.10, label="Soft overload")
-
-    # Hard overload band: [s_cap, s_end]
-    if f_cap:
-        ax.axvspan(s_cap, s[-1], alpha=0.12, label="Hard overload")
-
-    # Plot FP and FN vs s
-    ax.plot(s, FP, lw=2, label=f"FP ({mode_label})")
-    ax.plot(s, FN, lw=2, label=f"FN ({mode_label})")
-
-    ax.set_xlabel("Strictness s")
-    ax.set_ylabel(f"{label_prefix}: {mode_label}")
     ax.grid(True, alpha=0.3); ax.legend(loc="best")
 
 st.subheader("Per-stage FN–FP Trade-offs")
@@ -550,150 +460,211 @@ def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
     return fp_rate, fn_rate, FP, FN
 
 with tabs[0]:
-    colL, colR = st.columns(2)
+    # Add summary metrics above the chart
+    st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
+    total_processed = df_yes["seen1"].iloc[-1]
+    true_positives = df_yes["good"].iloc[-1]
+    false_positives = df_yes["bad"].iloc[-1]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total processed (CV stage)", f"{total_processed:.0f}")
+    with col2:
+        st.metric("True Positives (final)", f"{true_positives:.0f}")
+    with col3:
+        st.metric("False Positives (final)", f"{false_positives:.0f}")
 
-    # Get series (rates OR counts) for CV
+    fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
-    util_act_s1  = df_yes["util1"].to_numpy()
+    util_act_s1  = df_yes["util1"].to_numpy()   # ACTUAL segmentation
+    util_base_s1 = df_no["util1"].to_numpy()    # optional faint markers
 
     if rate_basis.startswith("Stage"):
-        X_fpfn = fp_rate_s1; Y_fpfn = fn_rate_s1
-        fp_vs_s = fp_rate_s1; fn_vs_s = fn_rate_s1
-        xlab = "FP rate at CV"; ylab = "FN rate at CV"; mode = "rates"
+        X, Y = fp_rate_s1, fn_rate_s1
+        xlab = "FP rate at CV (FP1 / seen1_b)"
+        ylab = "FN rate at CV (FN1 / seen1_g)"
     else:
-        X_fpfn = FP1; Y_fpfn = FN1
-        fp_vs_s = FP1; fn_vs_s = FN1
-        xlab = "FP count at CV"; ylab = "FN count at CV"; mode = "counts"
+        X, Y = FP1, FN1
+        xlab = "FP count at CV"
+        ylab = "FN count at CV"
 
-    # LEFT: FP–FN scatter, colored by zone (robust in FP–FN space)
-    with colL:
-        fig_sc, ax_sc = plt.subplots(figsize=(6,4))
-        plot_fp_fn_scatter(ax_sc, X_fpfn, Y_fpfn, util_act_s1, u_thr, "CV", xlab, ylab)
-        st.pyplot(fig_sc)
+    plot_tradeoff_actual(ax_s1, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
+                         util_base=util_base_s1, show_base=show_baseline_markers)
 
-    # RIGHT: FP & FN vs s with shaded zones (authoritative segmentation)
-    with colR:
-        fig_vs, ax_vs = plt.subplots(figsize=(6,4))
-        plot_fp_fn_vs_s(ax_vs, s_values, fp_vs_s, fn_vs_s, util_act_s1, u_thr, "CV", mode)
-        st.pyplot(fig_vs)
+    # Add a second X axis at the top, showing per-point TP (rate or count) for each FP point
+    ax_top = ax_s1.twiny()
+    ax_top.set_xlim(ax_s1.get_xlim())
+    TP_arr = df_yes["seen1_g"].to_numpy() - df_yes["FN1"].to_numpy()
+    TP_rate_arr = np.where(df_yes["seen1_g"].to_numpy() > 0, TP_arr / df_yes["seen1_g"].to_numpy(), 0.0)
+    fp_xticks = ax_s1.get_xticks()
+    # For each FP tick, find the closest FP value in X and use its index for TP
+    tick_indices = [int(np.argmin(np.abs(X - tick))) for tick in fp_xticks]
+    if rate_basis.startswith("Stage"):
+        top_labels = [f"{TP_rate_arr[i]:.2f}" for i in tick_indices]
+        ax_top.set_xlabel("True Positive Rate (CV)", fontsize=10)
+    else:
+        top_labels = [f"{int(TP_arr[i])}" for i in tick_indices]
+        ax_top.set_xlabel("True Positives (CV)", fontsize=10)
+    ax_top.set_xticks(fp_xticks)
+    ax_top.set_xticklabels(top_labels, rotation=0, fontsize=8)
+    ax_top.xaxis.set_ticks_position('top')
+    ax_top.xaxis.set_label_position('top')
+    st.pyplot(fig_s1)
 
 with tabs[1]:
-    colL, colR = st.columns(2)
-
-    # Series for Tech stage
+    st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
+    total_processed2 = df_yes["seen2"].iloc[-1]
+    true_positives2 = df_yes["good"].iloc[-1]
+    false_positives2 = df_yes["bad"].iloc[-1]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total processed (Tech stage)", f"{total_processed2:.0f}")
+    with col2:
+        st.metric("True Positives (final)", f"{true_positives2:.0f}")
+    with col3:
+        st.metric("False Positives (final)", f"{false_positives2:.0f}")
+    fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
-    util_act_s2 = df_yes["util2"].to_numpy()  # actual utilization for segmentation
+    util_act_s2  = df_yes["util2"].to_numpy()
+    util_base_s2 = df_no["util2"].to_numpy()
 
     if rate_basis.startswith("Stage"):
-        # View = rates
-        X_fpfn = fp_rate_s2; Y_fpfn = fn_rate_s2
-        fp_vs_s = fp_rate_s2; fn_vs_s = fn_rate_s2
+        X, Y = fp_rate_s2, fn_rate_s2
         xlab = "FP rate at Tech (FP2 / seen2_b)"
         ylab = "FN rate at Tech (FN2 / seen2_g)"
-        mode = "rates"
     else:
-        # View = counts
-        X_fpfn = FP2; Y_fpfn = FN2
-        fp_vs_s = FP2; fn_vs_s = FN2
+        X, Y = FP2, FN2
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
-        mode = "counts"
 
-    # LEFT: FP–FN scatter colored by zone (robust in FP–FN space)
-    with colL:
-        fig_sc2, ax_sc2 = plt.subplots(figsize=(6,4))
-        plot_fp_fn_scatter(ax_sc2, X_fpfn, Y_fpfn, util_act_s2, u_thr, "Tech", xlab, ylab)
-        st.pyplot(fig_sc2)
-
-    # RIGHT: FP & FN vs s with shaded soft/hard overload (authoritative segmentation)
-    with colR:
-        fig_vs2, ax_vs2 = plt.subplots(figsize=(6,4))
-        plot_fp_fn_vs_s(ax_vs2, s_values, fp_vs_s, fn_vs_s, util_act_s2, u_thr, "Tech", mode)
-        st.pyplot(fig_vs2)
+    plot_tradeoff_actual(ax_s2, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
+                         util_base=util_base_s2, show_base=show_baseline_markers)
+    # Add a second X axis at the top, showing per-point TP (rate or count) for each FP point
+    ax_top2 = ax_s2.twiny()
+    ax_top2.set_xlim(ax_s2.get_xlim())
+    TP_arr2 = df_yes["seen2_g"].to_numpy() - df_yes["FN2"].to_numpy()
+    TP_rate_arr2 = np.where(df_yes["seen2_g"].to_numpy() > 0, TP_arr2 / df_yes["seen2_g"].to_numpy(), 0.0)
+    fp_xticks2 = ax_s2.get_xticks()
+    tick_indices2 = [int(np.argmin(np.abs(X - tick))) for tick in fp_xticks2]
+    if rate_basis.startswith("Stage"):
+        top_labels2 = [f"{TP_rate_arr2[i]:.2f}" for i in tick_indices2]
+        ax_top2.set_xlabel("True Positive Rate (Tech)", fontsize=10)
+    else:
+        top_labels2 = [f"{int(TP_arr2[i])}" for i in tick_indices2]
+        ax_top2.set_xlabel("True Positives (Tech)", fontsize=10)
+    ax_top2.set_xticks(fp_xticks2)
+    ax_top2.set_xticklabels(top_labels2, rotation=0, fontsize=8)
+    ax_top2.xaxis.set_ticks_position('top')
+    ax_top2.xaxis.set_label_position('top')
+    st.pyplot(fig_s2)
 
 with tabs[2]:
-    colL, colR = st.columns(2)
-
-    # Series for HM stage
+    st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
+    total_processed3 = df_yes["seen3"].iloc[-1]
+    true_positives3 = df_yes["good"].iloc[-1]
+    false_positives3 = df_yes["bad"].iloc[-1]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total processed (HM stage)", f"{total_processed3:.0f}")
+    with col2:
+        st.metric("True Positives (final)", f"{true_positives3:.0f}")
+    with col3:
+        st.metric("False Positives (final)", f"{false_positives3:.0f}")
+    fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
-    util_act_s3 = df_yes["util3"].to_numpy()  # actual utilization for segmentation
+    util_act_s3  = df_yes["util3"].to_numpy()
+    util_base_s3 = df_no["util3"].to_numpy()
 
     if rate_basis.startswith("Stage"):
-        # View = rates
-        X_fpfn = fp_rate_s3; Y_fpfn = fn_rate_s3
-        fp_vs_s = fp_rate_s3; fn_vs_s = fn_rate_s3
+        X, Y = fp_rate_s3, fn_rate_s3
         xlab = "FP rate at HM (FP3 / seen3_b)"
         ylab = "FN rate at HM (FN3 / seen3_g)"
-        mode = "rates"
     else:
-        # View = counts
-        X_fpfn = FP3; Y_fpfn = FN3
-        fp_vs_s = FP3; fn_vs_s = FN3
+        X, Y = FP3, FN3
         xlab = "FP count at HM"
         ylab = "FN count at HM"
-        mode = "counts"
 
-    # LEFT: FP–FN scatter colored by zone (robust in FP–FN space)
-    with colL:
-        fig_sc3, ax_sc3 = plt.subplots(figsize=(6,4))
-        plot_fp_fn_scatter(ax_sc3, X_fpfn, Y_fpfn, util_act_s3, u_thr, "HM", xlab, ylab)
-        st.pyplot(fig_sc3)
-
-    # RIGHT: FP & FN vs s with shaded soft/hard overload (authoritative segmentation)
-    with colR:
-        fig_vs3, ax_vs3 = plt.subplots(figsize=(6,4))
-        plot_fp_fn_vs_s(ax_vs3, s_values, fp_vs_s, fn_vs_s, util_act_s3, u_thr, "HM", mode)
-        st.pyplot(fig_vs3)
+    plot_tradeoff_actual(ax_s3, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
+                         util_base=util_base_s3, show_base=show_baseline_markers)
+    # Add a second X axis at the top, showing per-point TP (rate or count) for each FP point
+    ax_top3 = ax_s3.twiny()
+    ax_top3.set_xlim(ax_s3.get_xlim())
+    TP_arr3 = df_yes["seen3_g"].to_numpy() - df_yes["FN3"].to_numpy()
+    TP_rate_arr3 = np.where(df_yes["seen3_g"].to_numpy() > 0, TP_arr3 / df_yes["seen3_g"].to_numpy(), 0.0)
+    fp_xticks3 = ax_s3.get_xticks()
+    tick_indices3 = [int(np.argmin(np.abs(X - tick))) for tick in fp_xticks3]
+    if rate_basis.startswith("Stage"):
+        top_labels3 = [f"{TP_rate_arr3[i]:.2f}" for i in tick_indices3]
+        ax_top3.set_xlabel("True Positive Rate (HM)", fontsize=10)
+    else:
+        top_labels3 = [f"{int(TP_arr3[i])}" for i in tick_indices3]
+        ax_top3.set_xlabel("True Positives (HM)", fontsize=10)
+    ax_top3.set_xticks(fp_xticks3)
+    ax_top3.set_xticklabels(top_labels3, rotation=0, fontsize=8)
+    ax_top3.xaxis.set_ticks_position('top')
+    ax_top3.xaxis.set_label_position('top')
+    st.pyplot(fig_s3)
 
 with tabs[3]:
-    # --- Build final FP/FN series (counts + rates)
+    st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
+    total_processedf = N
+    true_positivesf = df_yes["good"].iloc[-1]
+    false_positivesf = df_yes["bad"].iloc[-1]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total processed (Final stage)", f"{total_processedf:.0f}")
+    with col2:
+        st.metric("True Positives (final)", f"{true_positivesf:.0f}")
+    with col3:
+        st.metric("False Positives (final)", f"{false_positivesf:.0f}")
+    fig_sf, ax_sf = plt.subplots(figsize=(6,4))
     FPf = df_yes["bad"].to_numpy()
     FNf = (N * p_good - df_yes["good"]).to_numpy()
 
     if rate_basis.startswith("Stage"):
-        # Show rates
         denom_bad  = N * (1 - p_good)
         denom_good = N * p_good
-        X_fpfn = np.where(denom_bad  > 0, FPf / denom_bad,  0.0)  # FP rate
-        Y_fpfn = np.where(denom_good > 0, FNf / denom_good, 0.0)  # FN rate
-        fp_vs_s = X_fpfn
-        fn_vs_s = Y_fpfn
+        X = np.where(denom_bad  > 0, FPf / denom_bad,  0.0)
+        Y = np.where(denom_good > 0, FNf / denom_good, 0.0)
         xlab = "Final FP rate (bad / total bad)"
         ylab = "Final FN rate (missed / total good)"
-        mode = "rates"
     else:
-        # Show counts
-        X_fpfn = FPf
-        Y_fpfn = FNf
-        fp_vs_s = FPf
-        fn_vs_s = FNf
+        X, Y = FPf, FNf
         xlab = "Final FP count (bad hires)"
         ylab = "Final FN count (missed qualified)"
-        mode = "counts"
 
-    # --- Choose which stage's utilization drives segmentation (actual u)
-    if overload_stage.startswith("Stage1"):
+    if "Stage1" in overload_stage:
         util_act_final  = df_yes["util1"].to_numpy()
-        prefix = "Final (segmented by CV)"
-    elif overload_stage.startswith("Stage2"):
+        util_base_final = df_no["util1"].to_numpy()
+        prefix = "Final vs CV"
+    elif "Stage2" in overload_stage:
         util_act_final  = df_yes["util2"].to_numpy()
-        prefix = "Final (segmented by Tech)"
-    else:  # Stage3
+        util_base_final = df_no["util2"].to_numpy()
+        prefix = "Final vs Tech"
+    else:
         util_act_final  = df_yes["util3"].to_numpy()
-        prefix = "Final (segmented by HM)"
+        util_base_final = df_no["util3"].to_numpy()
+        prefix = "Final vs HM"
 
-    # --- Two-panel layout: (left) FP–FN scatter, (right) FP & FN vs s
-    colL, colR = st.columns(2)
-
-    with colL:
-        fig_sc, ax_sc = plt.subplots(figsize=(6,4))
-        plot_fp_fn_scatter(ax_sc, X_fpfn, Y_fpfn, util_act_final, u_thr, prefix, xlab, ylab)
-        st.pyplot(fig_sc)
-
-    with colR:
-        fig_vs, ax_vs = plt.subplots(figsize=(6,4))
-        plot_fp_fn_vs_s(ax_vs, s_values, fp_vs_s, fn_vs_s, util_act_final, u_thr, prefix, mode)
-        st.pyplot(fig_vs)
+    plot_tradeoff_actual(ax_sf, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
+                         util_base=util_base_final, show_base=show_baseline_markers)
+    # Add a second X axis at the top, showing per-point TP (rate or count) for each FP point
+    ax_topf = ax_sf.twiny()
+    ax_topf.set_xlim(ax_sf.get_xlim())
+    TPf = df_yes["good"].to_numpy()
+    TPf_rate = np.where(N * p_good > 0, TPf / (N * p_good), 0.0)
+    fp_xticksf = ax_sf.get_xticks()
+    tick_indicesf = [int(np.argmin(np.abs(X - tick))) for tick in fp_xticksf]
+    if rate_basis.startswith("Stage"):
+        top_labelsf = [f"{TPf_rate[i]:.2f}" for i in tick_indicesf]
+        ax_topf.set_xlabel("True Positive Rate (Final)", fontsize=10)
+    else:
+        top_labelsf = [f"{int(TPf[i])}" for i in tick_indicesf]
+        ax_topf.set_xlabel("True Positives (Final)", fontsize=10)
+    ax_topf.set_xticks(fp_xticksf)
+    ax_topf.set_xticklabels(top_labelsf, rotation=0, fontsize=8)
+    ax_topf.xaxis.set_ticks_position('top')
+    ax_topf.xaxis.set_label_position('top')
+    st.pyplot(fig_sf)
 
 # =========================================================
 # Stage-level FN and FP (After Pressure)
