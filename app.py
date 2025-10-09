@@ -646,9 +646,44 @@ with tabs[2]:
         st.pyplot(fig_vs3)
 
 with tabs[3]:
+    # --- Build final FP/FN series (counts + rates)
+    FPf = df_yes["bad"].to_numpy()
+    FNf = (N * p_good - df_yes["good"]).to_numpy()
+
+    if rate_basis.startswith("Stage"):
+        # Show rates
+        denom_bad  = N * (1 - p_good)
+        denom_good = N * p_good
+        X_fpfn = np.where(denom_bad  > 0, FPf / denom_bad,  0.0)  # FP rate
+        Y_fpfn = np.where(denom_good > 0, FNf / denom_good, 0.0)  # FN rate
+        fp_vs_s = X_fpfn
+        fn_vs_s = Y_fpfn
+        xlab = "Final FP rate (bad / total bad)"
+        ylab = "Final FN rate (missed / total good)"
+        mode = "rates"
+    else:
+        # Show counts
+        X_fpfn = FPf
+        Y_fpfn = FNf
+        fp_vs_s = FPf
+        fn_vs_s = FNf
+        xlab = "Final FP count (bad hires)"
+        ylab = "Final FN count (missed qualified)"
+        mode = "counts"
+
+    # --- Choose which stage's utilization drives segmentation (actual u)
+    if overload_stage.startswith("Stage1"):
+        util_act_final  = df_yes["util1"].to_numpy()
+        prefix = "Final (segmented by CV)"
+    elif overload_stage.startswith("Stage2"):
+        util_act_final  = df_yes["util2"].to_numpy()
+        prefix = "Final (segmented by Tech)"
+    else:  # Stage3
+        util_act_final  = df_yes["util3"].to_numpy()
+        prefix = "Final (segmented by HM)"
+
+    # --- Two-panel layout: (left) FP–FN scatter, (right) FP & FN vs s
     colL, colR = st.columns(2)
-    # Build X_fpfn, Y_fpfn, fp_vs_s, fn_vs_s exactly as you already do for Final
-    # and choose util_act_final based on overload_stage (you already have this)
 
     with colL:
         fig_sc, ax_sc = plt.subplots(figsize=(6,4))
