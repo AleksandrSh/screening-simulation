@@ -71,6 +71,10 @@ with st.sidebar:
         index=0
     )
     show_baseline_curve = st.checkbox("Also show FN–FP without pressure (overlay, rates only)", value=False)
+    
+    show_baseline_markers = st.sidebar.checkbox(
+    "Show faint baseline markers (u_base)", value=False
+    )
 
 # =========================================================
 # Model Functions
@@ -456,6 +460,79 @@ def plot_tradeoff_hybrid(
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best")
 
+def plot_tradeoff_actual(
+    ax, X, Y,
+    util_act,            # with-pressure utilization for this stage (df_yes["util*"])
+    u_thr,
+    label_prefix,
+    xlab, ylab,
+    # optional faint markers for baseline reference
+    util_base=None,      # df_no["util*"] for the same stage (optional)
+    show_base=False,
+):
+    """
+    Segments the curve using ACTUAL utilization (consistent with current settings):
+      - Pre-pressure: u_act ≤ u_thr          (solid)
+      - Soft overload: u_thr < u_act ≤ 1     (dash-dot)
+      - Hard overload: u_act > 1             (dashed)
+    Optionally draws faint baseline (no-pressure) vertical markers for reference.
+    """
+    import numpy as np
+    X = np.asarray(X); Y = np.asarray(Y)
+    u = np.asarray(util_act)
+
+    pre_mask  = (u <= u_thr)
+    soft_mask = (u > u_thr) & (u <= 1.0)
+    hard_mask = (u > 1.0)
+
+    # --- Draw by actual masks
+    if pre_mask.any():
+        ax.plot(X[pre_mask], Y[pre_mask], lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
+        ax.scatter(X[pre_mask], Y[pre_mask], s=12)
+
+    if soft_mask.any():
+        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
+                label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
+        ax.scatter(X[soft_mask], Y[soft_mask], s=12)
+        xs, xe = float(np.nanmin(X[soft_mask])), float(np.nanmax(X[soft_mask]))
+        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+            ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
+
+    if hard_mask.any():
+        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
+                label=f"{label_prefix} Hard overload (actual u > 1)")
+        ax.scatter(X[hard_mask], Y[hard_mask], s=12)
+        xs, xe = float(np.nanmin(X[hard_mask])), float(np.nanmax(X[hard_mask]))
+        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+            ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
+
+    # --- Actual vertical guides (first occurrences)
+    if soft_mask.any():
+        i_thr_act = int(np.argmax(soft_mask))         # first point with u_act > u_thr
+        ax.axvline(X[i_thr_act], ls="-.", lw=1.8, alpha=0.7,
+                   label=f"{label_prefix} Penalty onset (actual u = u_thr)")
+    if hard_mask.any():
+        i_cap_act = int(np.argmax(hard_mask))         # first point with u_act > 1
+        ax.axvline(X[i_cap_act], ls="-.", lw=1.8, alpha=0.7,
+                   label=f"{label_prefix} Capacity crossed (actual u = 1)")
+
+    # --- Optional: faint baseline markers for reference only
+    if show_base and (util_base is not None):
+        u0 = np.asarray(util_base)
+        soft0 = (u0 > u_thr) & (u0 <= 1.0)
+        hard0 = (u0 > 1.0)
+        if soft0.any():
+            i_thr_base = int(np.argmax(soft0))
+            ax.axvline(X[i_thr_base], ls=":", lw=1.4, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = u_thr")
+        if hard0.any():
+            i_cap_base = int(np.argmax(hard0))
+            ax.axvline(X[i_cap_base], ls=":", lw=1.4, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = 1")
+
+    ax.set_xlabel(xlab); ax.set_ylabel(ylab)
+    ax.grid(True, alpha=0.3); ax.legend(loc="best")
+
 st.subheader("Per-stage FN–FP Trade-offs")
 rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True)
 
@@ -474,8 +551,8 @@ def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
 with tabs[0]:
     fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
-    util_base_s1 = df_no["util1"].to_numpy()   # baseline (definition)
-    util_act_s1  = df_yes["util1"].to_numpy()  # actual (reality)
+    util_act_s1  = df_yes["util1"].to_numpy()   # ACTUAL segmentation
+    util_base_s1 = df_no["util1"].to_numpy()    # optional faint markers
 
     if rate_basis.startswith("Stage"):
         X, Y = fp_rate_s1, fn_rate_s1
@@ -486,14 +563,15 @@ with tabs[0]:
         xlab = "FP count at CV"
         ylab = "FN count at CV"
 
-    plot_tradeoff_hybrid(ax_s1, X, Y, util_base_s1, util_act_s1, u_thr, "CV", xlab, ylab)
+    plot_tradeoff_actual(ax_s1, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
+                         util_base=util_base_s1, show_base=show_baseline_markers)
     st.pyplot(fig_s1)
 
 with tabs[1]:
     fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
-    util_base_s2 = df_no["util2"].to_numpy()
     util_act_s2  = df_yes["util2"].to_numpy()
+    util_base_s2 = df_no["util2"].to_numpy()
 
     if rate_basis.startswith("Stage"):
         X, Y = fp_rate_s2, fn_rate_s2
@@ -504,14 +582,15 @@ with tabs[1]:
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
 
-    plot_tradeoff_hybrid(ax_s2, X, Y, util_base_s2, util_act_s2, u_thr, "Tech", xlab, ylab)
+    plot_tradeoff_actual(ax_s2, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
+                         util_base=util_base_s2, show_base=show_baseline_markers)
     st.pyplot(fig_s2)
 
 with tabs[2]:
     fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
-    util_base_s3 = df_no["util3"].to_numpy()
     util_act_s3  = df_yes["util3"].to_numpy()
+    util_base_s3 = df_no["util3"].to_numpy()
 
     if rate_basis.startswith("Stage"):
         X, Y = fp_rate_s3, fn_rate_s3
@@ -522,7 +601,8 @@ with tabs[2]:
         xlab = "FP count at HM"
         ylab = "FN count at HM"
 
-    plot_tradeoff_hybrid(ax_s3, X, Y, util_base_s3, util_act_s3, u_thr, "HM", xlab, ylab)
+    plot_tradeoff_actual(ax_s3, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
+                         util_base=util_base_s3, show_base=show_baseline_markers)
     st.pyplot(fig_s3)
 
 with tabs[3]:
@@ -542,21 +622,21 @@ with tabs[3]:
         xlab = "Final FP count (bad hires)"
         ylab = "Final FN count (missed qualified)"
 
-    # segmentation stage choice as in your sidebar
     if "Stage1" in overload_stage:
-        util_base_final = df_no["util1"].to_numpy()
         util_act_final  = df_yes["util1"].to_numpy()
+        util_base_final = df_no["util1"].to_numpy()
         prefix = "Final vs CV"
     elif "Stage2" in overload_stage:
-        util_base_final = df_no["util2"].to_numpy()
         util_act_final  = df_yes["util2"].to_numpy()
+        util_base_final = df_no["util2"].to_numpy()
         prefix = "Final vs Tech"
     else:
-        util_base_final = df_no["util3"].to_numpy()
         util_act_final  = df_yes["util3"].to_numpy()
+        util_base_final = df_no["util3"].to_numpy()
         prefix = "Final vs HM"
 
-    plot_tradeoff_hybrid(ax_sf, X, Y, util_base_final, util_act_final, u_thr, prefix, xlab, ylab)
+    plot_tradeoff_actual(ax_sf, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
+                         util_base=util_base_final, show_base=show_baseline_markers)
     st.pyplot(fig_sf)
 
 # =========================================================
