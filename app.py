@@ -332,138 +332,140 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 #     ax.grid(True, alpha=0.3)
 #     ax.legend(loc="best")
 
-def plot_tradeoff_three_zones(ax, X, Y, util_base, u_thr, label_prefix, xlab, ylab):
-    """
-    Segments a trade-off curve into 3 zones using *baseline* utilization:
-      Zone A: u <= u_thr                 (pre-pressure)
-      Zone B: u_thr < u <= 1             (soft overload: penalty only)
-      Zone C: u > 1                      (hard overload: capacity exceeded)
+# def plot_tradeoff_three_zones(ax, X, Y, util_base, u_thr, label_prefix, xlab, ylab):
+#     """
+#     Segments a trade-off curve into 3 zones using *baseline* utilization:
+#       Zone A: u <= u_thr                 (pre-pressure)
+#       Zone B: u_thr < u <= 1             (soft overload: penalty only)
+#       Zone C: u > 1                      (hard overload: capacity exceeded)
 
-    Draws: solid line for A, dashdot for B, dashed for C.
-    Adds vertical lines at the first x of u=u_thr and u=1 (if present),
-    and shades the soft-overload and hard-overload x-ranges.
-    """
-    u = np.asarray(util_base)
-    X = np.asarray(X); Y = np.asarray(Y)
+#     Draws: solid line for A, dashdot for B, dashed for C.
+#     Adds vertical lines at the first x of u=u_thr and u=1 (if present),
+#     and shades the soft-overload and hard-overload x-ranges.
+#     """
+#     u = np.asarray(util_base)
+#     X = np.asarray(X); Y = np.asarray(Y)
 
-    A = u <= u_thr
-    B = (u > u_thr) & (u <= 1.0)
-    C = u > 1.0
+#     A = u <= u_thr
+#     B = (u > u_thr) & (u <= 1.0)
+#     C = u > 1.0
 
-    # ---- plotting
-    if A.any():
-        ax.plot(X[A], Y[A], linewidth=2, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
-        ax.scatter(X[A], Y[A], s=12)
+#     # ---- plotting
+#     if A.any():
+#         ax.plot(X[A], Y[A], linewidth=2, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
+#         ax.scatter(X[A], Y[A], s=12)
 
-    if B.any():
-        ax.plot(X[B], Y[B], linewidth=2, linestyle="dashdot",
-                label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
-        ax.scatter(X[B], Y[B], s=12)
-        # shade soft overload span on X
-        xb_min = float(np.nanmin(X[B])); xb_max = float(np.nanmax(X[B]))
-        if np.isfinite(xb_min) and np.isfinite(xb_max) and xb_max > xb_min:
-            ax.axvspan(xb_min, xb_max, alpha=0.10, label=f"{label_prefix} Soft overload region")
+#     if B.any():
+#         ax.plot(X[B], Y[B], linewidth=2, linestyle="dashdot",
+#                 label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
+#         ax.scatter(X[B], Y[B], s=12)
+#         # shade soft overload span on X
+#         xb_min = float(np.nanmin(X[B])); xb_max = float(np.nanmax(X[B]))
+#         if np.isfinite(xb_min) and np.isfinite(xb_max) and xb_max > xb_min:
+#             ax.axvspan(xb_min, xb_max, alpha=0.10, label=f"{label_prefix} Soft overload region")
 
-    if C.any():
-        ax.plot(X[C], Y[C], linewidth=2, linestyle="--",
-                label=f"{label_prefix} Hard overload (u > 1)")
-        ax.scatter(X[C], Y[C], s=12)
-        # shade hard overload span on X
-        xc_min = float(np.nanmin(X[C])); xc_max = float(np.nanmax(X[C]))
-        if np.isfinite(xc_min) and np.isfinite(xc_max) and xc_max > xc_min:
-            ax.axvspan(xc_min, xc_max, alpha=0.12, label=f"{label_prefix} Hard overload region")
+#     if C.any():
+#         ax.plot(X[C], Y[C], linewidth=2, linestyle="--",
+#                 label=f"{label_prefix} Hard overload (u > 1)")
+#         ax.scatter(X[C], Y[C], s=12)
+#         # shade hard overload span on X
+#         xc_min = float(np.nanmin(X[C])); xc_max = float(np.nanmax(X[C]))
+#         if np.isfinite(xc_min) and np.isfinite(xc_max) and xc_max > xc_min:
+#             ax.axvspan(xc_min, xc_max, alpha=0.12, label=f"{label_prefix} Hard overload region")
 
-    # Vertical guides at first occurrences (map threshold-in-s to X via the first point in each mask)
-    # u = u_thr
-    if B.any():
-        thr_idx = int(np.argmax(B))  # first True in B
-        ax.axvline(X[thr_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Penalty starts (u = u_thr)")
+#     # Vertical guides at first occurrences (map threshold-in-s to X via the first point in each mask)
+#     # u = u_thr
+#     if B.any():
+#         thr_idx = int(np.argmax(B))  # first True in B
+#         ax.axvline(X[thr_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Penalty starts (u = u_thr)")
 
-    # u = 1
-    if C.any():
-        cap_idx = int(np.argmax(C))
-        ax.axvline(X[cap_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Capacity crossing (u = 1)")
+#     # u = 1
+#     if C.any():
+#         cap_idx = int(np.argmax(C))
+#         ax.axvline(X[cap_idx], linestyle=":", linewidth=2, label=f"{label_prefix} Capacity crossing (u = 1)")
 
-    ax.set_xlabel(xlab); ax.set_ylabel(ylab)
-    ax.grid(True, alpha=0.3); ax.legend(loc="best")
+#     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
+#     ax.grid(True, alpha=0.3); ax.legend(loc="best")
 
-def plot_tradeoff_hybrid(
-    ax, X, Y,
-    util_base,     # baseline u (from df_no) → zones (A/B/C) & shading
-    util_actual,   # with-pressure u (from df_yes) → where overload REALLY starts
-    u_thr,
-    label_prefix,
-    xlab, ylab
-):
+# def plot_tradeoff_hybrid(
+#     ax, X, Y,
+#     util_base,     # baseline u (from df_no) → zones (A/B/C) & shading
+#     util_actual,   # with-pressure u (from df_yes) → where overload REALLY starts
+#     u_thr,
+#     label_prefix,
+#     xlab, ylab
+# ):
 
-    X = np.asarray(X); Y = np.asarray(Y)
-    u_base = np.asarray(util_base)
-    u_act  = np.asarray(util_actual)
+# ========
 
-    # -------- 1) ZONES from BASELINE (definition view)
-    pre_mask   = (u_base <= u_thr)                # Zone A: pre-pressure
-    soft_mask  = (u_base > u_thr) & (u_base <= 1) # Zone B: soft overload
-    hard_mask  = (u_base > 1.0)                   # Zone C: hard overload
+#     X = np.asarray(X); Y = np.asarray(Y)
+#     u_base = np.asarray(util_base)
+#     u_act  = np.asarray(util_actual)
 
-    # Draw each zone with distinct style + shaded spans (definition)
-    if pre_mask.any():
-        ax.plot(X[pre_mask], Y[pre_mask], lw=2, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
-        ax.scatter(X[pre_mask], Y[pre_mask], s=14)
+#     # -------- 1) ZONES from BASELINE (definition view)
+#     pre_mask   = (u_base <= u_thr)                # Zone A: pre-pressure
+#     soft_mask  = (u_base > u_thr) & (u_base <= 1) # Zone B: soft overload
+#     hard_mask  = (u_base > 1.0)                   # Zone C: hard overload
 
-    if soft_mask.any():
-        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
-                label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
-        ax.scatter(X[soft_mask], Y[soft_mask], s=14)
-        xs, xe = float(np.nanmin(X[soft_mask])), float(np.nanmax(X[soft_mask]))
-        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
-            ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload region")
+#     # Draw each zone with distinct style + shaded spans (definition)
+#     if pre_mask.any():
+#         ax.plot(X[pre_mask], Y[pre_mask], lw=2, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
+#         ax.scatter(X[pre_mask], Y[pre_mask], s=14)
 
-    if hard_mask.any():
-        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
-                label=f"{label_prefix} Hard overload (u > 1)")
-        ax.scatter(X[hard_mask], Y[hard_mask], s=14)
-        xs, xe = float(np.nanmin(X[hard_mask])), float(np.nanmax(X[hard_mask]))
-        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
-            ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload region")
+#     if soft_mask.any():
+#         ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
+#                 label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
+#         ax.scatter(X[soft_mask], Y[soft_mask], s=14)
+#         xs, xe = float(np.nanmin(X[soft_mask])), float(np.nanmax(X[soft_mask]))
+#         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+#             ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload region")
 
-    # -------- 2) BASELINE vertical guides (definition)
-    # First index where u_base > u_thr (penalty starts by definition)
-    if soft_mask.any():
-        i_thr_base = int(np.argmax(soft_mask))
-        ax.axvline(X[i_thr_base], ls=":", lw=2, color=None, label=f"{label_prefix} Penalty starts (baseline u = u_thr)")
-    # First index where u_base > 1 (capacity crossing by definition)
-    if hard_mask.any():
-        i_cap_base = int(np.argmax(hard_mask))
-        ax.axvline(X[i_cap_base], ls=":", lw=2, color=None, label=f"{label_prefix} Capacity crossing (baseline u = 1)")
+#     if hard_mask.any():
+#         ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
+#                 label=f"{label_prefix} Hard overload (u > 1)")
+#         ax.scatter(X[hard_mask], Y[hard_mask], s=14)
+#         xs, xe = float(np.nanmin(X[hard_mask])), float(np.nanmax(X[hard_mask]))
+#         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
+#             ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload region")
 
-    # -------- 3) ACTUAL markers (reality)
-    # Where the with-pressure utilization actually exceeds u_thr and 1.0
-    soft_act_mask = (u_act > u_thr) & (u_act <= 1.0)
-    hard_act_mask = (u_act > 1.0)
+#     # -------- 2) BASELINE vertical guides (definition)
+#     # First index where u_base > u_thr (penalty starts by definition)
+#     if soft_mask.any():
+#         i_thr_base = int(np.argmax(soft_mask))
+#         ax.axvline(X[i_thr_base], ls=":", lw=2, color=None, label=f"{label_prefix} Penalty starts (baseline u = u_thr)")
+#     # First index where u_base > 1 (capacity crossing by definition)
+#     if hard_mask.any():
+#         i_cap_base = int(np.argmax(hard_mask))
+#         ax.axvline(X[i_cap_base], ls=":", lw=2, color=None, label=f"{label_prefix} Capacity crossing (baseline u = 1)")
 
-    # first actual onset (u_act > u_thr)
-    if soft_act_mask.any():
-        i_thr_act = int(np.argmax(soft_act_mask))
-        ax.scatter([X[i_thr_act]], [Y[i_thr_act]], s=80, marker="^",
-                   label=f"{label_prefix} Penalty onset (actual u = u_thr)")
-        ax.axvline(X[i_thr_act], ls="-.", lw=1.8, alpha=0.7)
+#     # -------- 3) ACTUAL markers (reality)
+#     # Where the with-pressure utilization actually exceeds u_thr and 1.0
+#     soft_act_mask = (u_act > u_thr) & (u_act <= 1.0)
+#     hard_act_mask = (u_act > 1.0)
 
-    # first actual capacity crossing (u_act > 1)
-    if hard_act_mask.any():
-        i_cap_act = int(np.argmax(hard_act_mask))
-        ax.scatter([X[i_cap_act]], [Y[i_cap_act]], s=80, marker="v",
-                   label=f"{label_prefix} Capacity crossed (actual u = 1)")
-        ax.axvline(X[i_cap_act], ls="-.", lw=1.8, alpha=0.7)
+#     # first actual onset (u_act > u_thr)
+#     if soft_act_mask.any():
+#         i_thr_act = int(np.argmax(soft_act_mask))
+#         ax.scatter([X[i_thr_act]], [Y[i_thr_act]], s=80, marker="^",
+#                    label=f"{label_prefix} Penalty onset (actual u = u_thr)")
+#         ax.axvline(X[i_thr_act], ls="-.", lw=1.8, alpha=0.7)
 
-    # -------- 4) Cosmetics
-    ax.set_xlabel(xlab); ax.set_ylabel(ylab)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best")
+#     # first actual capacity crossing (u_act > 1)
+#     if hard_act_mask.any():
+#         i_cap_act = int(np.argmax(hard_act_mask))
+#         ax.scatter([X[i_cap_act]], [Y[i_cap_act]], s=80, marker="v",
+#                    label=f"{label_prefix} Capacity crossed (actual u = 1)")
+#         ax.axvline(X[i_cap_act], ls="-.", lw=1.8, alpha=0.7)
+
+#     # -------- 4) Cosmetics
+#     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
+#     ax.grid(True, alpha=0.3)
+#     ax.legend(loc="best")
 
 def first_crossing_s(s, u, thr, eps=1e-12):
     """
-    Find the *first* s where u crosses 'thr' from below.
-    Returns (found, s_star, i0, i1) with linear interpolation between i0→i1.
+    First s where u crosses thr from below. Linear interpolation between samples.
+    Returns: (found, s_star, i0, i1)
     """
     s = np.asarray(s); u = np.asarray(u)
     above = u > thr + eps
@@ -482,7 +484,7 @@ def first_crossing_s(s, u, thr, eps=1e-12):
 
 def interp_at_s(s, v, s_star, i0, i1):
     """
-    Interpolate v(s) at s_star using i0,i1. If i0 is None, return v[i1].
+    Interpolate v(s) at s_star using (i0,i1). If i0 is None, return v[i1].
     """
     s = np.asarray(s); v = np.asarray(v)
     if i0 is None or i1 is None:
@@ -493,78 +495,91 @@ def interp_at_s(s, v, s_star, i0, i1):
     w = (s_star - s[i0]) / ds
     return float(v[i0] + w * (v[i1] - v[i0]))
 
-def plot_tradeoff_actual_interpolated(
+def plot_tradeoff_actual_interpolated_mono(
     ax, s_vals, X, Y,
-    util_act,                 # df_yes["util*"]  (actual)
+    util_act,                 # df_yes["util*"]  (actual utilization for segmentation)
     u_thr,
     label_prefix,
     xlab, ylab,
-    util_base=None,           # optional: df_no["util*"] (baseline markers only)
+    util_base=None,           # optional baseline markers
     show_base=False
 ):
+    """
+    - Segments by ACTUAL utilization into pre / soft / hard.
+    - Finds exact crossing s* for u=u_thr and u=1 (interpolated).
+    - Uses a monotone X proxy (cumulative max of X along s) ONLY for verticals & spans
+      so shaded regions never 'leak left' when FP is non-monotonic.
+    - The curve itself remains the true (X,Y) so you still see real wiggles.
+    """
     s = np.asarray(s_vals)
     X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(util_act)
     eps = 1e-12
 
-    # ----- zone masks on ACTUAL utilization
+    # ---- segmentation by ACTUAL u
     pre_mask  = (u <= u_thr + eps)
     soft_mask = (u >  u_thr + eps) & (u <= 1.0 + eps)
     hard_mask = (u >  1.0 + eps)
 
-    # ----- draw the polyline segments (actual)
+    # ---- draw polylines (true X,Y)
     if pre_mask.any():
         ax.plot(X[pre_mask],  Y[pre_mask],  lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
         ax.scatter(X[pre_mask], Y[pre_mask], s=12)
     if soft_mask.any():
-        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot", label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
+        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
+                label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
         ax.scatter(X[soft_mask], Y[soft_mask], s=12)
     if hard_mask.any():
-        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--", label=f"{label_prefix} Hard overload (actual u > 1)")
+        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
+                label=f"{label_prefix} Hard overload (actual u > 1)")
         ax.scatter(X[hard_mask], Y[hard_mask], s=12)
 
-    # ----- interpolated crossing points in s, then mapped to X
+    # ---- crossings in s, then map to X using monotone proxy for spans/lines
     f_thr, s_thr, i0t, i1t = first_crossing_s(s, u, u_thr)
     f_cap, s_cap, i0c, i1c = first_crossing_s(s, u, 1.0)
 
-    X_thr = interp_at_s(s, X, s_thr, i0t, i1t) if f_thr else None
-    X_cap = interp_at_s(s, X, s_cap, i0c, i1c) if f_cap else None
+    # monotone proxy: cumulative max of X along s (prevents bands jumping left)
+    X_mono = np.maximum.accumulate(X)
 
-    # ----- shaded bands start at true crossing X (prevents “left leak”)
+    X_thr = interp_at_s(s, X_mono, s_thr, i0t, i1t) if f_thr else None
+    X_cap = interp_at_s(s, X_mono, s_cap, i0c, i1c) if f_cap else None
+
+    # ---- soft band: from s_thr to last s with u ≤ 1 (all in s, projected via X_mono)
     if f_thr and soft_mask.any():
-        # soft band: s from s_thr up to last s with u ≤ 1
-        soft_end_idx = np.where(u <= 1.0 + eps)[0]
-        s_soft_end = s[soft_end_idx[-1]] if soft_end_idx.size else s_thr
-        X_soft_end = interp_at_s(s, X, s_soft_end,
-                                 (np.searchsorted(s, s_soft_end)-1) if s_soft_end not in s else None,
-                                 (np.searchsorted(s, s_soft_end))     if s_soft_end not in s else np.where(s==s_soft_end)[0][0])
+        last_soft_idx = np.where(u <= 1.0 + eps)[0]
+        s_soft_end = s[last_soft_idx[-1]] if last_soft_idx.size else s_thr
+        X_soft_end = interp_at_s(
+            s, X_mono, s_soft_end,
+            (np.searchsorted(s, s_soft_end)-1) if s_soft_end not in s else None,
+            (np.searchsorted(s, s_soft_end))     if s_soft_end not in s else np.where(s==s_soft_end)[0][0]
+        )
         xs, xe = float(min(X_thr, X_soft_end)), float(max(X_thr, X_soft_end))
         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
             ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
 
+    # ---- hard band: from s_cap to s_end (project via X_mono)
     if f_cap and hard_mask.any():
-        # hard band: s from s_cap to end of sweep
         xs = float(X_cap)
-        xe = float(X[-1])
+        xe = float(X_mono[-1])
         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
             ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
 
-    # ----- vertical guides at interpolated crossings (actual)
+    # ---- vertical guides at interpolated crossings (use X_mono so they align with bands)
     if f_thr and np.isfinite(X_thr):
         ax.axvline(X_thr, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Penalty onset (actual u = u_thr)")
     if f_cap and np.isfinite(X_cap):
         ax.axvline(X_cap, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Capacity crossed (actual u = 1)")
 
-    # ----- optional faint BASELINE markers (reference only)
+    # ---- optional faint BASELINE markers (interpolated in s, projected with X_mono for consistency)
     if show_base and (util_base is not None):
         u0 = np.asarray(util_base)
         fb_thr, s0_thr, j0t, j1t = first_crossing_s(s, u0, u_thr)
         fb_cap, s0_cap, j0c, j1c = first_crossing_s(s, u0, 1.0)
         if fb_thr:
-            X0_thr = interp_at_s(s, X, s0_thr, j0t, j1t)
+            X0_thr = interp_at_s(s, X_mono, s0_thr, j0t, j1t)
             if np.isfinite(X0_thr):
                 ax.axvline(X0_thr, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = u_thr")
         if fb_cap:
-            X0_cap = interp_at_s(s, X, s0_cap, j0c, j1c)
+            X0_cap = interp_at_s(s, X_mono, s0_cap, j0c, j1c)
             if np.isfinite(X0_cap):
                 ax.axvline(X0_cap, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = 1")
 
@@ -601,7 +616,7 @@ with tabs[0]:
         xlab = "FP count at CV"
         ylab = "FN count at CV"
 
-    plot_tradeoff_actual_interpolated(
+    plot_tradeoff_actual_interpolated_mono(
         ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
         util_base=util_base_s1, show_base=show_baseline_markers
     )
@@ -622,7 +637,7 @@ with tabs[1]:
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
 
-    plot_tradeoff_actual_interpolated(
+    plot_tradeoff_actual_interpolated_mono(
         ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
         util_base=util_base_s2, show_base=show_baseline_markers
     )
@@ -643,7 +658,7 @@ with tabs[2]:
         xlab = "FP count at HM"
         ylab = "FN count at HM"
 
-    plot_tradeoff_actual_interpolated(
+    plot_tradeoff_actual_interpolated_mono(
         ax_s3, s_values, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
         util_base=util_base_s3, show_base=show_baseline_markers
     )
@@ -680,7 +695,7 @@ with tabs[3]:
         util_base_final = df_no["util3"].to_numpy()
         prefix = "Final vs HM"
 
-    plot_tradeoff_actual_interpolated(
+    plot_tradeoff_actual_interpolated_mono(
         ax_sf, s_values, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
         util_base=util_base_final, show_base=show_baseline_markers
     )
