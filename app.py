@@ -462,65 +462,64 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 #     ax.grid(True, alpha=0.3)
 #     ax.legend(loc="best")
 
+import numpy as np
+
 def first_crossing_s(s, u, thr, eps=1e-12):
     """
-    First s where u crosses thr from below. Linear interpolation between samples.
-    Returns: (found, s_star, i0, i1)
+    Return (found, s_star) where u(s) first crosses 'thr' from below.
+    We assume s is strictly increasing. Uses linear interpolation in s.
     """
     s = np.asarray(s); u = np.asarray(u)
     above = u > thr + eps
     if not np.any(above):
-        return False, None, None, None
+        return False, None
     i1 = int(np.argmax(above))
     if i1 == 0:
-        return True, float(s[0]), None, 0
+        return True, float(s[0])
     i0 = i1 - 1
     du = u[i1] - u[i0]
     if abs(du) < eps:
-        return True, float(s[i1]), i0, i1
+        return True, float(s[i1])
     t = (thr - u[i0]) / du
-    s_star = s[i0] + t * (s[i1] - s[i0])
-    return True, float(s_star), i0, i1
+    return True, float(s[i0] + t * (s[i1] - s[i0]))
 
-def interp_at_s(s, v, s_star, i0, i1):
+def x_at_s(s, X_mono, s_star):
     """
-    Interpolate v(s) at s_star using (i0,i1). If i0 is None, return v[i1].
+    Map a strictness value s_star to the x-axis using a monotone proxy X_mono.
+    Uses np.interp so it cannot fail even if s_star is between grid points.
     """
-    s = np.asarray(s); v = np.asarray(v)
-    if i0 is None or i1 is None:
-        return float(v[i1])
-    ds = s[i1] - s[i0]
-    if abs(ds) < 1e-12:
-        return float(v[i1])
-    w = (s_star - s[i0]) / ds
-    return float(v[i0] + w * (v[i1] - v[i0]))
+    s = np.asarray(s); X_mono = np.asarray(X_mono)
+    return float(np.interp(s_star, s, X_mono))
 
 def plot_tradeoff_actual_interpolated_mono(
     ax, s_vals, X, Y,
-    util_act,                 # df_yes["util*"]  (actual utilization for segmentation)
+    util_act,                 # actual utilization (df_yes["util*"])
     u_thr,
     label_prefix,
     xlab, ylab,
-    util_base=None,           # optional baseline markers
+    util_base=None,           # optional baseline utilization (df_no["util*"])
     show_base=False
 ):
     """
-    - Segments by ACTUAL utilization into pre / soft / hard.
-    - Finds exact crossing s* for u=u_thr and u=1 (interpolated).
-    - Uses a monotone X proxy (cumulative max of X along s) ONLY for verticals & spans
-      so shaded regions never 'leak left' when FP is non-monotonic.
-    - The curve itself remains the true (X,Y) so you still see real wiggles.
+    Segments by ACTUAL utilization (pre / soft / hard).
+    Crossings (u = u_thr, u = 1) are computed in s, then projected to X using
+    a monotone proxy X_mono = cummax(X). This guarantees non-vanishing spans
+    and properly placed vertical guides even when X is non-monotonic.
+    The plotted polyline remains the true (X, Y) so you still see real wiggles.
     """
     s = np.asarray(s_vals)
     X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(util_act)
     eps = 1e-12
 
-    # ---- segmentation by ACTUAL u
+    # 0) Build a monotone X proxy used ONLY for spans/verticals
+    X_mono = np.maximum.accumulate(X)
+
+    # 1) Segment by ACTUAL u
     pre_mask  = (u <= u_thr + eps)
     soft_mask = (u >  u_thr + eps) & (u <= 1.0 + eps)
     hard_mask = (u >  1.0 + eps)
 
-    # ---- draw polylines (true X,Y)
+    # 2) Draw polylines with TRUE X,Y (keep wiggles)
     if pre_mask.any():
         ax.plot(X[pre_mask],  Y[pre_mask],  lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
         ax.scatter(X[pre_mask], Y[pre_mask], s=12)
@@ -533,55 +532,47 @@ def plot_tradeoff_actual_interpolated_mono(
                 label=f"{label_prefix} Hard overload (actual u > 1)")
         ax.scatter(X[hard_mask], Y[hard_mask], s=12)
 
-    # ---- crossings in s, then map to X using monotone proxy for spans/lines
-    f_thr, s_thr, i0t, i1t = first_crossing_s(s, u, u_thr)
-    f_cap, s_cap, i0c, i1c = first_crossing_s(s, u, 1.0)
+    # 3) Find crossings in s (robust)
+    f_thr, s_thr = first_crossing_s(s, u, u_thr)
+    f_cap, s_cap = first_crossing_s(s, u, 1.0)
 
-    # monotone proxy: cumulative max of X along s (prevents bands jumping left)
-    X_mono = np.maximum.accumulate(X)
-
-    X_thr = interp_at_s(s, X_mono, s_thr, i0t, i1t) if f_thr else None
-    X_cap = interp_at_s(s, X_mono, s_cap, i0c, i1c) if f_cap else None
-
-    # ---- soft band: from s_thr to last s with u ≤ 1 (all in s, projected via X_mono)
+    # 4) Shade bands using s-intervals, then map to X via X_mono
+    # Soft band: [s_thr, s_cap) if both exist; otherwise [s_thr, s_end]
     if f_thr and soft_mask.any():
-        last_soft_idx = np.where(u <= 1.0 + eps)[0]
-        s_soft_end = s[last_soft_idx[-1]] if last_soft_idx.size else s_thr
-        X_soft_end = interp_at_s(
-            s, X_mono, s_soft_end,
-            (np.searchsorted(s, s_soft_end)-1) if s_soft_end not in s else None,
-            (np.searchsorted(s, s_soft_end))     if s_soft_end not in s else np.where(s==s_soft_end)[0][0]
-        )
-        xs, xe = float(min(X_thr, X_soft_end)), float(max(X_thr, X_soft_end))
-        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
-            ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
+        s_soft_end = s_cap if f_cap else s[-1]
+        xs = x_at_s(s, X_mono, s_thr)
+        xe = x_at_s(s, X_mono, s_soft_end)
+        x_left, x_right = float(min(xs, xe)), float(max(xs, xe))
+        if np.isfinite(x_left) and np.isfinite(x_right) and x_right > x_left:
+            ax.axvspan(x_left, x_right, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
 
-    # ---- hard band: from s_cap to s_end (project via X_mono)
+    # Hard band: [s_cap, s_end]
     if f_cap and hard_mask.any():
-        xs = float(X_cap)
+        xs = x_at_s(s, X_mono, s_cap)
         xe = float(X_mono[-1])
-        if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
-            ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
+        x_left, x_right = float(min(xs, xe)), float(max(xs, xe))
+        if np.isfinite(x_left) and np.isfinite(x_right) and x_right > x_left:
+            ax.axvspan(x_left, x_right, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
 
-    # ---- vertical guides at interpolated crossings (use X_mono so they align with bands)
-    if f_thr and np.isfinite(X_thr):
-        ax.axvline(X_thr, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Penalty onset (actual u = u_thr)")
-    if f_cap and np.isfinite(X_cap):
-        ax.axvline(X_cap, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Capacity crossed (actual u = 1)")
+    # 5) Vertical guides aligned with spans (use X_mono)
+    if f_thr:
+        ax.axvline(x_at_s(s, X_mono, s_thr), ls="-.", lw=1.8, alpha=0.8,
+                   label=f"{label_prefix} Penalty onset (actual u = u_thr)")
+    if f_cap:
+        ax.axvline(x_at_s(s, X_mono, s_cap), ls="-.", lw=1.8, alpha=0.8,
+                   label=f"{label_prefix} Capacity crossed (actual u = 1)")
 
-    # ---- optional faint BASELINE markers (interpolated in s, projected with X_mono for consistency)
+    # 6) Optional faint BASELINE markers (also projected with X_mono for consistency)
     if show_base and (util_base is not None):
         u0 = np.asarray(util_base)
-        fb_thr, s0_thr, j0t, j1t = first_crossing_s(s, u0, u_thr)
-        fb_cap, s0_cap, j0c, j1c = first_crossing_s(s, u0, 1.0)
+        fb_thr, s0_thr = first_crossing_s(s, u0, u_thr)
+        fb_cap, s0_cap = first_crossing_s(s, u0, 1.0)
         if fb_thr:
-            X0_thr = interp_at_s(s, X_mono, s0_thr, j0t, j1t)
-            if np.isfinite(X0_thr):
-                ax.axvline(X0_thr, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = u_thr")
+            ax.axvline(x_at_s(s, X_mono, s0_thr), ls=":", lw=1.2, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = u_thr")
         if fb_cap:
-            X0_cap = interp_at_s(s, X_mono, s0_cap, j0c, j1c)
-            if np.isfinite(X0_cap):
-                ax.axvline(X0_cap, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = 1")
+            ax.axvline(x_at_s(s, X_mono, s0_cap), ls=":", lw=1.2, alpha=0.35,
+                       label=f"{label_prefix} Baseline u = 1")
 
     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
     ax.grid(True, alpha=0.3); ax.legend(loc="best")
