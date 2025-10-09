@@ -460,75 +460,113 @@ def plot_tradeoff_hybrid(
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best")
 
-def plot_tradeoff_actual(
-    ax, X, Y,
-    util_act,            # with-pressure utilization for this stage (df_yes["util*"])
+def first_crossing_s(s, u, thr, eps=1e-12):
+    """
+    Find the *first* s where u crosses 'thr' from below.
+    Returns (found, s_star, i0, i1) with linear interpolation between i0→i1.
+    """
+    s = np.asarray(s); u = np.asarray(u)
+    above = u > thr + eps
+    if not np.any(above):
+        return False, None, None, None
+    i1 = int(np.argmax(above))
+    if i1 == 0:
+        return True, float(s[0]), None, 0
+    i0 = i1 - 1
+    du = u[i1] - u[i0]
+    if abs(du) < eps:
+        return True, float(s[i1]), i0, i1
+    t = (thr - u[i0]) / du
+    s_star = s[i0] + t * (s[i1] - s[i0])
+    return True, float(s_star), i0, i1
+
+def interp_at_s(s, v, s_star, i0, i1):
+    """
+    Interpolate v(s) at s_star using i0,i1. If i0 is None, return v[i1].
+    """
+    s = np.asarray(s); v = np.asarray(v)
+    if i0 is None or i1 is None:
+        return float(v[i1])
+    ds = s[i1] - s[i0]
+    if abs(ds) < 1e-12:
+        return float(v[i1])
+    w = (s_star - s[i0]) / ds
+    return float(v[i0] + w * (v[i1] - v[i0]))
+
+def plot_tradeoff_actual_interpolated(
+    ax, s_vals, X, Y,
+    util_act,                 # df_yes["util*"]  (actual)
     u_thr,
     label_prefix,
     xlab, ylab,
-    # optional faint markers for baseline reference
-    util_base=None,      # df_no["util*"] for the same stage (optional)
-    show_base=False,
+    util_base=None,           # optional: df_no["util*"] (baseline markers only)
+    show_base=False
 ):
-    """
-    Segments the curve using ACTUAL utilization (consistent with current settings):
-      - Pre-pressure: u_act ≤ u_thr          (solid)
-      - Soft overload: u_thr < u_act ≤ 1     (dash-dot)
-      - Hard overload: u_act > 1             (dashed)
-    Optionally draws faint baseline (no-pressure) vertical markers for reference.
-    """
-    import numpy as np
-    X = np.asarray(X); Y = np.asarray(Y)
-    u = np.asarray(util_act)
+    s = np.asarray(s_vals)
+    X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(util_act)
+    eps = 1e-12
 
-    pre_mask  = (u <= u_thr)
-    soft_mask = (u > u_thr) & (u <= 1.0)
-    hard_mask = (u > 1.0)
+    # ----- zone masks on ACTUAL utilization
+    pre_mask  = (u <= u_thr + eps)
+    soft_mask = (u >  u_thr + eps) & (u <= 1.0 + eps)
+    hard_mask = (u >  1.0 + eps)
 
-    # --- Draw by actual masks
+    # ----- draw the polyline segments (actual)
     if pre_mask.any():
-        ax.plot(X[pre_mask], Y[pre_mask], lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
+        ax.plot(X[pre_mask],  Y[pre_mask],  lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
         ax.scatter(X[pre_mask], Y[pre_mask], s=12)
-
     if soft_mask.any():
-        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
-                label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
+        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot", label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
         ax.scatter(X[soft_mask], Y[soft_mask], s=12)
-        xs, xe = float(np.nanmin(X[soft_mask])), float(np.nanmax(X[soft_mask]))
+    if hard_mask.any():
+        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--", label=f"{label_prefix} Hard overload (actual u > 1)")
+        ax.scatter(X[hard_mask], Y[hard_mask], s=12)
+
+    # ----- interpolated crossing points in s, then mapped to X
+    f_thr, s_thr, i0t, i1t = first_crossing_s(s, u, u_thr)
+    f_cap, s_cap, i0c, i1c = first_crossing_s(s, u, 1.0)
+
+    X_thr = interp_at_s(s, X, s_thr, i0t, i1t) if f_thr else None
+    X_cap = interp_at_s(s, X, s_cap, i0c, i1c) if f_cap else None
+
+    # ----- shaded bands start at true crossing X (prevents “left leak”)
+    if f_thr and soft_mask.any():
+        # soft band: s from s_thr up to last s with u ≤ 1
+        soft_end_idx = np.where(u <= 1.0 + eps)[0]
+        s_soft_end = s[soft_end_idx[-1]] if soft_end_idx.size else s_thr
+        X_soft_end = interp_at_s(s, X, s_soft_end,
+                                 (np.searchsorted(s, s_soft_end)-1) if s_soft_end not in s else None,
+                                 (np.searchsorted(s, s_soft_end))     if s_soft_end not in s else np.where(s==s_soft_end)[0][0])
+        xs, xe = float(min(X_thr, X_soft_end)), float(max(X_thr, X_soft_end))
         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
             ax.axvspan(xs, xe, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
 
-    if hard_mask.any():
-        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
-                label=f"{label_prefix} Hard overload (actual u > 1)")
-        ax.scatter(X[hard_mask], Y[hard_mask], s=12)
-        xs, xe = float(np.nanmin(X[hard_mask])), float(np.nanmax(X[hard_mask]))
+    if f_cap and hard_mask.any():
+        # hard band: s from s_cap to end of sweep
+        xs = float(X_cap)
+        xe = float(X[-1])
         if np.isfinite(xs) and np.isfinite(xe) and xe > xs:
             ax.axvspan(xs, xe, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
 
-    # --- Actual vertical guides (first occurrences)
-    if soft_mask.any():
-        i_thr_act = int(np.argmax(soft_mask))         # first point with u_act > u_thr
-        ax.axvline(X[i_thr_act], ls="-.", lw=1.8, alpha=0.7,
-                   label=f"{label_prefix} Penalty onset (actual u = u_thr)")
-    if hard_mask.any():
-        i_cap_act = int(np.argmax(hard_mask))         # first point with u_act > 1
-        ax.axvline(X[i_cap_act], ls="-.", lw=1.8, alpha=0.7,
-                   label=f"{label_prefix} Capacity crossed (actual u = 1)")
+    # ----- vertical guides at interpolated crossings (actual)
+    if f_thr and np.isfinite(X_thr):
+        ax.axvline(X_thr, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Penalty onset (actual u = u_thr)")
+    if f_cap and np.isfinite(X_cap):
+        ax.axvline(X_cap, ls="-.", lw=1.8, alpha=0.8, label=f"{label_prefix} Capacity crossed (actual u = 1)")
 
-    # --- Optional: faint baseline markers for reference only
+    # ----- optional faint BASELINE markers (reference only)
     if show_base and (util_base is not None):
         u0 = np.asarray(util_base)
-        soft0 = (u0 > u_thr) & (u0 <= 1.0)
-        hard0 = (u0 > 1.0)
-        if soft0.any():
-            i_thr_base = int(np.argmax(soft0))
-            ax.axvline(X[i_thr_base], ls=":", lw=1.4, alpha=0.35,
-                       label=f"{label_prefix} Baseline u = u_thr")
-        if hard0.any():
-            i_cap_base = int(np.argmax(hard0))
-            ax.axvline(X[i_cap_base], ls=":", lw=1.4, alpha=0.35,
-                       label=f"{label_prefix} Baseline u = 1")
+        fb_thr, s0_thr, j0t, j1t = first_crossing_s(s, u0, u_thr)
+        fb_cap, s0_cap, j0c, j1c = first_crossing_s(s, u0, 1.0)
+        if fb_thr:
+            X0_thr = interp_at_s(s, X, s0_thr, j0t, j1t)
+            if np.isfinite(X0_thr):
+                ax.axvline(X0_thr, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = u_thr")
+        if fb_cap:
+            X0_cap = interp_at_s(s, X, s0_cap, j0c, j1c)
+            if np.isfinite(X0_cap):
+                ax.axvline(X0_cap, ls=":", lw=1.2, alpha=0.35, label=f"{label_prefix} Baseline u = 1")
 
     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
     ax.grid(True, alpha=0.3); ax.legend(loc="best")
@@ -563,8 +601,10 @@ with tabs[0]:
         xlab = "FP count at CV"
         ylab = "FN count at CV"
 
-    plot_tradeoff_actual(ax_s1, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
-                         util_base=util_base_s1, show_base=show_baseline_markers)
+   plot_tradeoff_actual_interpolated(
+       ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
+       util_base=util_base_s1, show_base=show_baseline_markers
+   )
     st.pyplot(fig_s1)
 
 with tabs[1]:
@@ -582,8 +622,10 @@ with tabs[1]:
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
 
-    plot_tradeoff_actual(ax_s2, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
-                         util_base=util_base_s2, show_base=show_baseline_markers)
+   plot_tradeoff_actual_interpolated(
+       ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
+       util_base=util_base_s2, show_base=show_baseline_markers
+   )
     st.pyplot(fig_s2)
 
 with tabs[2]:
@@ -601,8 +643,11 @@ with tabs[2]:
         xlab = "FP count at HM"
         ylab = "FN count at HM"
 
-    plot_tradeoff_actual(ax_s3, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
-                         util_base=util_base_s3, show_base=show_baseline_markers)
+    plot_tradeoff_actual_interpolated(
+        ax_s3, s_values, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
+        util_base=util_base_s3, show_base=show_baseline_markers
+    )
+
     st.pyplot(fig_s3)
 
 with tabs[3]:
@@ -635,8 +680,10 @@ with tabs[3]:
         util_base_final = df_no["util3"].to_numpy()
         prefix = "Final vs HM"
 
-    plot_tradeoff_actual(ax_sf, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
-                         util_base=util_base_final, show_base=show_baseline_markers)
+    plot_tradeoff_actual_interpolated(
+        ax_sf, s_values, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
+        util_base=util_base_final, show_base=show_baseline_markers
+    )
     st.pyplot(fig_sf)
 
 # =========================================================
