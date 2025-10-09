@@ -601,10 +601,10 @@ with tabs[0]:
         xlab = "FP count at CV"
         ylab = "FN count at CV"
 
-   plot_tradeoff_actual_interpolated(
-       ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
-       util_base=util_base_s1, show_base=show_baseline_markers
-   )
+    plot_tradeoff_actual_interpolated(
+        ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
+        util_base=util_base_s1, show_base=show_baseline_markers
+    )
     st.pyplot(fig_s1)
 
 with tabs[1]:
@@ -622,10 +622,10 @@ with tabs[1]:
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
 
-   plot_tradeoff_actual_interpolated(
-       ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
-       util_base=util_base_s2, show_base=show_baseline_markers
-   )
+    plot_tradeoff_actual_interpolated(
+        ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
+        util_base=util_base_s2, show_base=show_baseline_markers
+    )
     st.pyplot(fig_s2)
 
 with tabs[2]:
