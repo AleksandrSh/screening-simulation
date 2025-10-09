@@ -462,13 +462,14 @@ with st.expander("ℹ️ How to read the FN–FP chart"):
 #     ax.grid(True, alpha=0.3)
 #     ax.legend(loc="best")
 
-import numpy as np
+def zones_actual(u, u_thr, eps=1e-12):
+    pre  = (u <= u_thr + eps)
+    soft = (u >  u_thr + eps) & (u <= 1.0 + eps)
+    hard = (u >  1.0 + eps)
+    return pre, soft, hard
 
-def first_crossing_s(s, u, thr, eps=1e-12):
-    """
-    Return (found, s_star) where u(s) first crosses 'thr' from below.
-    We assume s is strictly increasing. Uses linear interpolation in s.
-    """
+def crossings_s(s, u, thr, eps=1e-12):
+    """Return (found, s_cross) where u first crosses thr from below (linear in s)."""
     s = np.asarray(s); u = np.asarray(u)
     above = u > thr + eps
     if not np.any(above):
@@ -483,98 +484,54 @@ def first_crossing_s(s, u, thr, eps=1e-12):
     t = (thr - u[i0]) / du
     return True, float(s[i0] + t * (s[i1] - s[i0]))
 
-def x_at_s(s, X_mono, s_star):
-    """
-    Map a strictness value s_star to the x-axis using a monotone proxy X_mono.
-    Uses np.interp so it cannot fail even if s_star is between grid points.
-    """
-    s = np.asarray(s); X_mono = np.asarray(X_mono)
-    return float(np.interp(s_star, s, X_mono))
+def plot_fp_fn_scatter(ax, X, Y, u_act, u_thr, label_prefix, xlab, ylab):
+    X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(u_act)
+    pre, soft, hard = zones_actual(u, u_thr)
 
-def plot_tradeoff_actual_interpolated_mono(
-    ax, s_vals, X, Y,
-    util_act,                 # actual utilization (df_yes["util*"])
-    u_thr,
-    label_prefix,
-    xlab, ylab,
-    util_base=None,           # optional baseline utilization (df_no["util*"])
-    show_base=False
-):
-    """
-    Segments by ACTUAL utilization (pre / soft / hard).
-    Crossings (u = u_thr, u = 1) are computed in s, then projected to X using
-    a monotone proxy X_mono = cummax(X). This guarantees non-vanishing spans
-    and properly placed vertical guides even when X is non-monotonic.
-    The plotted polyline remains the true (X, Y) so you still see real wiggles.
-    """
-    s = np.asarray(s_vals)
-    X = np.asarray(X); Y = np.asarray(Y); u = np.asarray(util_act)
-    eps = 1e-12
+    # connect all points (thin line) just to show the path
+    ax.plot(X, Y, lw=1, alpha=0.5, color="gray")
 
-    # 0) Build a monotone X proxy used ONLY for spans/verticals
-    X_mono = np.maximum.accumulate(X)
-
-    # 1) Segment by ACTUAL u
-    pre_mask  = (u <= u_thr + eps)
-    soft_mask = (u >  u_thr + eps) & (u <= 1.0 + eps)
-    hard_mask = (u >  1.0 + eps)
-
-    # 2) Draw polylines with TRUE X,Y (keep wiggles)
-    if pre_mask.any():
-        ax.plot(X[pre_mask],  Y[pre_mask],  lw=2, label=f"{label_prefix} Pre-pressure (actual u ≤ u_thr)")
-        ax.scatter(X[pre_mask], Y[pre_mask], s=12)
-    if soft_mask.any():
-        ax.plot(X[soft_mask], Y[soft_mask], lw=2, ls="dashdot",
-                label=f"{label_prefix} Soft overload (actual u_thr < u ≤ 1)")
-        ax.scatter(X[soft_mask], Y[soft_mask], s=12)
-    if hard_mask.any():
-        ax.plot(X[hard_mask], Y[hard_mask], lw=2, ls="--",
-                label=f"{label_prefix} Hard overload (actual u > 1)")
-        ax.scatter(X[hard_mask], Y[hard_mask], s=12)
-
-    # 3) Find crossings in s (robust)
-    f_thr, s_thr = first_crossing_s(s, u, u_thr)
-    f_cap, s_cap = first_crossing_s(s, u, 1.0)
-
-    # 4) Shade bands using s-intervals, then map to X via X_mono
-    # Soft band: [s_thr, s_cap) if both exist; otherwise [s_thr, s_end]
-    if f_thr and soft_mask.any():
-        s_soft_end = s_cap if f_cap else s[-1]
-        xs = x_at_s(s, X_mono, s_thr)
-        xe = x_at_s(s, X_mono, s_soft_end)
-        x_left, x_right = float(min(xs, xe)), float(max(xs, xe))
-        if np.isfinite(x_left) and np.isfinite(x_right) and x_right > x_left:
-            ax.axvspan(x_left, x_right, alpha=0.10, label=f"{label_prefix} Soft overload (actual)")
-
-    # Hard band: [s_cap, s_end]
-    if f_cap and hard_mask.any():
-        xs = x_at_s(s, X_mono, s_cap)
-        xe = float(X_mono[-1])
-        x_left, x_right = float(min(xs, xe)), float(max(xs, xe))
-        if np.isfinite(x_left) and np.isfinite(x_right) and x_right > x_left:
-            ax.axvspan(x_left, x_right, alpha=0.12, label=f"{label_prefix} Hard overload (actual)")
-
-    # 5) Vertical guides aligned with spans (use X_mono)
-    if f_thr:
-        ax.axvline(x_at_s(s, X_mono, s_thr), ls="-.", lw=1.8, alpha=0.8,
-                   label=f"{label_prefix} Penalty onset (actual u = u_thr)")
-    if f_cap:
-        ax.axvline(x_at_s(s, X_mono, s_cap), ls="-.", lw=1.8, alpha=0.8,
-                   label=f"{label_prefix} Capacity crossed (actual u = 1)")
-
-    # 6) Optional faint BASELINE markers (also projected with X_mono for consistency)
-    if show_base and (util_base is not None):
-        u0 = np.asarray(util_base)
-        fb_thr, s0_thr = first_crossing_s(s, u0, u_thr)
-        fb_cap, s0_cap = first_crossing_s(s, u0, 1.0)
-        if fb_thr:
-            ax.axvline(x_at_s(s, X_mono, s0_thr), ls=":", lw=1.2, alpha=0.35,
-                       label=f"{label_prefix} Baseline u = u_thr")
-        if fb_cap:
-            ax.axvline(x_at_s(s, X_mono, s0_cap), ls=":", lw=1.2, alpha=0.35,
-                       label=f"{label_prefix} Baseline u = 1")
+    if pre.any():
+        ax.scatter(X[pre],  Y[pre],  s=18, label=f"{label_prefix} Pre-pressure (u ≤ u_thr)")
+    if soft.any():
+        ax.scatter(X[soft], Y[soft], s=22, marker="s", label=f"{label_prefix} Soft overload (u_thr < u ≤ 1)")
+    if hard.any():
+        ax.scatter(X[hard], Y[hard], s=26, marker="^", label=f"{label_prefix} Hard overload (u > 1)")
 
     ax.set_xlabel(xlab); ax.set_ylabel(ylab)
+    ax.grid(True, alpha=0.3); ax.legend(loc="best")
+
+def plot_fp_fn_vs_s(ax, s_vals, fp_series, fn_series, u_act, u_thr, label_prefix, mode_label):
+    s  = np.asarray(s_vals)
+    FP = np.asarray(fp_series)
+    FN = np.asarray(fn_series)
+    u  = np.asarray(u_act)
+
+    pre, soft, hard = zones_actual(u, u_thr)
+    f_thr, s_thr = crossings_s(s, u, u_thr)
+    f_cap, s_cap = crossings_s(s, u, 1.0)
+
+    # Shade zones on the s-axis (this is robust because s is monotonic)
+    if f_thr:
+        ax.axvline(s_thr, ls="--", lw=1.5, alpha=0.8, label="Penalty onset (u = u_thr)")
+    if f_cap:
+        ax.axvline(s_cap, ls="--", lw=1.5, alpha=0.8, label="Capacity crossed (u = 1)")
+
+    # Soft overload band: [s_thr, s_cap) or [s_thr, s_end] if no cap
+    if f_thr:
+        s_soft_end = s_cap if f_cap else s[-1]
+        ax.axvspan(s_thr, s_soft_end, alpha=0.10, label="Soft overload")
+
+    # Hard overload band: [s_cap, s_end]
+    if f_cap:
+        ax.axvspan(s_cap, s[-1], alpha=0.12, label="Hard overload")
+
+    # Plot FP and FN vs s
+    ax.plot(s, FP, lw=2, label=f"FP ({mode_label})")
+    ax.plot(s, FN, lw=2, label=f"FN ({mode_label})")
+
+    ax.set_xlabel("Strictness s")
+    ax.set_ylabel(f"{label_prefix}: {mode_label}")
     ax.grid(True, alpha=0.3); ax.legend(loc="best")
 
 st.subheader("Per-stage FN–FP Trade-offs")
@@ -593,104 +550,115 @@ def stage_rates(df, seen_g_col, seen_b_col, FN_col, FP_col):
     return fp_rate, fn_rate, FP, FN
 
 with tabs[0]:
-    fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
+    colL, colR = st.columns(2)
+
+    # Get series (rates OR counts) for CV
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
-    util_act_s1  = df_yes["util1"].to_numpy()   # ACTUAL segmentation
-    util_base_s1 = df_no["util1"].to_numpy()    # optional faint markers
+    util_act_s1  = df_yes["util1"].to_numpy()
 
     if rate_basis.startswith("Stage"):
-        X, Y = fp_rate_s1, fn_rate_s1
-        xlab = "FP rate at CV (FP1 / seen1_b)"
-        ylab = "FN rate at CV (FN1 / seen1_g)"
+        X_fpfn = fp_rate_s1; Y_fpfn = fn_rate_s1
+        fp_vs_s = fp_rate_s1; fn_vs_s = fn_rate_s1
+        xlab = "FP rate at CV"; ylab = "FN rate at CV"; mode = "rates"
     else:
-        X, Y = FP1, FN1
-        xlab = "FP count at CV"
-        ylab = "FN count at CV"
+        X_fpfn = FP1; Y_fpfn = FN1
+        fp_vs_s = FP1; fn_vs_s = FN1
+        xlab = "FP count at CV"; ylab = "FN count at CV"; mode = "counts"
 
-    plot_tradeoff_actual_interpolated_mono(
-        ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
-        util_base=util_base_s1, show_base=show_baseline_markers
-    )
-    st.pyplot(fig_s1)
+    # LEFT: FP–FN scatter, colored by zone (robust in FP–FN space)
+    with colL:
+        fig_sc, ax_sc = plt.subplots(figsize=(6,4))
+        plot_fp_fn_scatter(ax_sc, X_fpfn, Y_fpfn, util_act_s1, u_thr, "CV", xlab, ylab)
+        st.pyplot(fig_sc)
+
+    # RIGHT: FP & FN vs s with shaded zones (authoritative segmentation)
+    with colR:
+        fig_vs, ax_vs = plt.subplots(figsize=(6,4))
+        plot_fp_fn_vs_s(ax_vs, s_values, fp_vs_s, fn_vs_s, util_act_s1, u_thr, "CV", mode)
+        st.pyplot(fig_vs)
 
 with tabs[1]:
-    fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
+    colL, colR = st.columns(2)
+
+    # Series for Tech stage
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
-    util_act_s2  = df_yes["util2"].to_numpy()
-    util_base_s2 = df_no["util2"].to_numpy()
+    util_act_s2 = df_yes["util2"].to_numpy()  # actual utilization for segmentation
 
     if rate_basis.startswith("Stage"):
-        X, Y = fp_rate_s2, fn_rate_s2
+        # View = rates
+        X_fpfn = fp_rate_s2; Y_fpfn = fn_rate_s2
+        fp_vs_s = fp_rate_s2; fn_vs_s = fn_rate_s2
         xlab = "FP rate at Tech (FP2 / seen2_b)"
         ylab = "FN rate at Tech (FN2 / seen2_g)"
+        mode = "rates"
     else:
-        X, Y = FP2, FN2
+        # View = counts
+        X_fpfn = FP2; Y_fpfn = FN2
+        fp_vs_s = FP2; fn_vs_s = FN2
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
+        mode = "counts"
 
-    plot_tradeoff_actual_interpolated_mono(
-        ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
-        util_base=util_base_s2, show_base=show_baseline_markers
-    )
-    st.pyplot(fig_s2)
+    # LEFT: FP–FN scatter colored by zone (robust in FP–FN space)
+    with colL:
+        fig_sc2, ax_sc2 = plt.subplots(figsize=(6,4))
+        plot_fp_fn_scatter(ax_sc2, X_fpfn, Y_fpfn, util_act_s2, u_thr, "Tech", xlab, ylab)
+        st.pyplot(fig_sc2)
+
+    # RIGHT: FP & FN vs s with shaded soft/hard overload (authoritative segmentation)
+    with colR:
+        fig_vs2, ax_vs2 = plt.subplots(figsize=(6,4))
+        plot_fp_fn_vs_s(ax_vs2, s_values, fp_vs_s, fn_vs_s, util_act_s2, u_thr, "Tech", mode)
+        st.pyplot(fig_vs2)
 
 with tabs[2]:
-    fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
+    colL, colR = st.columns(2)
+
+    # Series for HM stage
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
-    util_act_s3  = df_yes["util3"].to_numpy()
-    util_base_s3 = df_no["util3"].to_numpy()
+    util_act_s3 = df_yes["util3"].to_numpy()  # actual utilization for segmentation
 
     if rate_basis.startswith("Stage"):
-        X, Y = fp_rate_s3, fn_rate_s3
+        # View = rates
+        X_fpfn = fp_rate_s3; Y_fpfn = fn_rate_s3
+        fp_vs_s = fp_rate_s3; fn_vs_s = fn_rate_s3
         xlab = "FP rate at HM (FP3 / seen3_b)"
         ylab = "FN rate at HM (FN3 / seen3_g)"
+        mode = "rates"
     else:
-        X, Y = FP3, FN3
+        # View = counts
+        X_fpfn = FP3; Y_fpfn = FN3
+        fp_vs_s = FP3; fn_vs_s = FN3
         xlab = "FP count at HM"
         ylab = "FN count at HM"
+        mode = "counts"
 
-    plot_tradeoff_actual_interpolated_mono(
-        ax_s3, s_values, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
-        util_base=util_base_s3, show_base=show_baseline_markers
-    )
+    # LEFT: FP–FN scatter colored by zone (robust in FP–FN space)
+    with colL:
+        fig_sc3, ax_sc3 = plt.subplots(figsize=(6,4))
+        plot_fp_fn_scatter(ax_sc3, X_fpfn, Y_fpfn, util_act_s3, u_thr, "HM", xlab, ylab)
+        st.pyplot(fig_sc3)
 
-    st.pyplot(fig_s3)
+    # RIGHT: FP & FN vs s with shaded soft/hard overload (authoritative segmentation)
+    with colR:
+        fig_vs3, ax_vs3 = plt.subplots(figsize=(6,4))
+        plot_fp_fn_vs_s(ax_vs3, s_values, fp_vs_s, fn_vs_s, util_act_s3, u_thr, "HM", mode)
+        st.pyplot(fig_vs3)
 
 with tabs[3]:
-    fig_sf, ax_sf = plt.subplots(figsize=(6,4))
-    FPf = df_yes["bad"].to_numpy()
-    FNf = (N * p_good - df_yes["good"]).to_numpy()
+    colL, colR = st.columns(2)
+    # Build X_fpfn, Y_fpfn, fp_vs_s, fn_vs_s exactly as you already do for Final
+    # and choose util_act_final based on overload_stage (you already have this)
 
-    if rate_basis.startswith("Stage"):
-        denom_bad  = N * (1 - p_good)
-        denom_good = N * p_good
-        X = np.where(denom_bad  > 0, FPf / denom_bad,  0.0)
-        Y = np.where(denom_good > 0, FNf / denom_good, 0.0)
-        xlab = "Final FP rate (bad / total bad)"
-        ylab = "Final FN rate (missed / total good)"
-    else:
-        X, Y = FPf, FNf
-        xlab = "Final FP count (bad hires)"
-        ylab = "Final FN count (missed qualified)"
+    with colL:
+        fig_sc, ax_sc = plt.subplots(figsize=(6,4))
+        plot_fp_fn_scatter(ax_sc, X_fpfn, Y_fpfn, util_act_final, u_thr, prefix, xlab, ylab)
+        st.pyplot(fig_sc)
 
-    if "Stage1" in overload_stage:
-        util_act_final  = df_yes["util1"].to_numpy()
-        util_base_final = df_no["util1"].to_numpy()
-        prefix = "Final vs CV"
-    elif "Stage2" in overload_stage:
-        util_act_final  = df_yes["util2"].to_numpy()
-        util_base_final = df_no["util2"].to_numpy()
-        prefix = "Final vs Tech"
-    else:
-        util_act_final  = df_yes["util3"].to_numpy()
-        util_base_final = df_no["util3"].to_numpy()
-        prefix = "Final vs HM"
-
-    plot_tradeoff_actual_interpolated_mono(
-        ax_sf, s_values, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
-        util_base=util_base_final, show_base=show_baseline_markers
-    )
-    st.pyplot(fig_sf)
+    with colR:
+        fig_vs, ax_vs = plt.subplots(figsize=(6,4))
+        plot_fp_fn_vs_s(ax_vs, s_values, fp_vs_s, fn_vs_s, util_act_final, u_thr, prefix, mode)
+        st.pyplot(fig_vs)
 
 # =========================================================
 # Stage-level FN and FP (After Pressure)
