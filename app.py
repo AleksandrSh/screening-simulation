@@ -597,7 +597,7 @@ with tabs[0]:
         xlab = "FP count at CV"
         ylab = "FN count at CV"
 
-    plot_tradeoff_actual_interpolated(ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
+    plot_tradeoff_actual_zones(ax_s1, s_values, X, Y, util_act_s1, u_thr, "CV", xlab, ylab,
                          util_base=util_base_s1, show_base=show_baseline_markers)
     st.pyplot(fig_s1)
 
@@ -616,7 +616,7 @@ with tabs[1]:
         xlab = "FP count at Tech"
         ylab = "FN count at Tech"
 
-    plot_tradeoff_actual_interpolated(ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
+    plot_tradeoff_actual_zones(ax_s2, s_values, X, Y, util_act_s2, u_thr, "Tech", xlab, ylab,
                          util_base=util_base_s2, show_base=show_baseline_markers)
     st.pyplot(fig_s2)
 
@@ -635,7 +635,7 @@ with tabs[2]:
         xlab = "FP count at HM"
         ylab = "FN count at HM"
 
-    plot_tradeoff_actual_interpolated(ax_s3, s_values, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
+    plot_tradeoff_actual_zones(ax_s3, s_values, X, Y, util_act_s3, u_thr, "HM", xlab, ylab,
                          util_base=util_base_s3, show_base=show_baseline_markers)
     st.pyplot(fig_s3)
 
@@ -669,7 +669,7 @@ with tabs[3]:
         util_base_final = df_no["util3"].to_numpy()
         prefix = "Final vs HM"
 
-    plot_tradeoff_actual_interpolated(ax_sf, s_values, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
+    plot_tradeoff_actual_zones(ax_sf, s_values, X, Y, util_act_final, u_thr, prefix, xlab, ylab,
                          util_base=util_base_final, show_base=show_baseline_markers)
     st.pyplot(fig_sf)
 
