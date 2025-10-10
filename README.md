@@ -51,6 +51,8 @@ Use the left sidebar to tweak:
 | **Capacity pressure toggle** | Enable/disable performance degradation under overload |
 | **u_thr / u_max** | Utilization thresholds for pressure effect (see below) |
 | **α_TPR / α_TNR** | How much accuracy (TPR, TNR) can drop under max pressure |
+| **Over-cautious strictness toggle** | Enable FP-averse mode (penalizes TPR as TNR rises) |
+| **Over-cautiousness k** | Penalty factor: how much TPR drops per unit TNR gain |
 
 ---
 
@@ -91,6 +93,18 @@ The pressure effect models what happens when a stage is overloaded:
 - At \( u = 1.0 \) → slight penalty, TPR drops ~5%.  
 - At \( u = 1.5 \) → full penalty, TPR drops 30%.  
 - At \( u = 2.0 \) → penalty remains at 30% (capped).  
+
+---
+
+### 🛡️ Over-Cautious Strictness (FP-Averse)
+
+The simulator includes an **over-cautious strictness** option, modeling a process that is especially averse to false positives (bad hires):
+
+- When enabled, increasing strictness raises the **True Negative Rate (TNR)** (fewer unqualified candidates pass).
+- However, this comes at a cost: the **True Positive Rate (TPR)** is capped and penalized as TNR rises, meaning some qualified candidates may be rejected to avoid bad hires.
+- The **penalty factor** (k) controls how much TPR drops for each unit gain in TNR.
+
+This effect helps visualize the trade-off between being highly selective (avoiding bad hires) and potentially missing out on good candidates.
 
 ---
 

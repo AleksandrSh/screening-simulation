@@ -61,7 +61,7 @@ with st.sidebar:
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
     overload_stage = st.selectbox(
-        "Overload segmentation stage (for FN–FP chart)",
+        "Overload segmentation stage (affects only Final FN–FP chart)",
         ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
         index=1,
     )
