@@ -98,7 +98,7 @@ The pressure effect models what happens when a stage is overloaded:
 
 - **Summary KPIs**: Good hires, Bad hires, Precision, Final TPR  
 - **Good & Bad Hires — Before vs After Pressure**: Compare results with and without overload effects  
-- **FN vs FP Trade-off (with pressure)**: Shows how false negatives and false positives trade off as strictness changes  
+-- **Per-Stage FN–FP Trade-Off (tabbed chart)**: Explore false negatives and false positives for each stage (CV, Tech, HM, Final) using interactive tabs  
 - **Stage-level FN & FP breakdown**: Mistakes introduced in each stage, stacked for comparison  
 - **Raw data table**: Full numerical results for each strictness value  
 
