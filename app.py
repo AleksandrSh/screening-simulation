@@ -39,6 +39,19 @@ with st.sidebar:
     alpha_tpr = st.slider("α_TPR (max TPR drop)", 0.0, 0.8, 0.30, 0.01)
     alpha_tnr = st.slider("α_TNR (max TNR drop)", 0.0, 0.8, 0.30, 0.01)
 
+    # Asymmetric strictness (FP-averse)
+    st.subheader("Asymmetric strictness (FP-averse)")
+    use_asym = st.toggle("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
+    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 1.60, 0.05)
+
+    # FN–FP chart options (for pipeline view)
+    st.subheader("FN–FP chart options")
+    overload_stage = st.selectbox(
+        "Overload segmentation stage (affects only Final FN–FP chart)",
+        ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
+        index=1,
+    )
+
     # Stage endpoints (lenient → strict)
     st.subheader("TPR/TNR endpoints (lenient → strict)")
     def rate_pair(label, tpr_len, tnr_len, tpr_str, tnr_str):
@@ -53,18 +66,6 @@ with st.sidebar:
     TPR2_len, TNR2_len, TPR2_str, TNR2_str = rate_pair("Tech", 0.60, 0.75, 0.90, 0.97)
     TPR3_len, TNR3_len, TPR3_str, TNR3_str = rate_pair("HM",   0.70, 0.80, 0.95, 0.98)
 
-    # Asymmetric strictness (FP-averse)
-    st.subheader("Asymmetric strictness (FP-averse)")
-    use_asym = st.checkbox("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
-    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 1.60, 0.05)
-
-    # FN–FP chart options (for pipeline view)
-    st.subheader("FN–FP chart options")
-    overload_stage = st.selectbox(
-        "Overload segmentation stage (affects only Final FN–FP chart)",
-        ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
-        index=1,
-    )
     show_baseline_markers = st.sidebar.checkbox(
         "Show faint baseline markers (u_base)", value=False
     )
