@@ -165,6 +165,8 @@ def simulate_once(s, with_pressure):
         "seen1": seen1, "seen1_g": seen1_g, "seen1_b": seen1_b,
         "seen2": seen2, "seen2_g": seen2_g, "seen2_b": seen2_b,
         "seen3": seen3, "seen3_g": seen3_g, "seen3_b": seen3_b,
+        # stage totals (for capacity analysis)
+        "tot1": tot1, "tot2": tot2,
     }
 
 def sweep(with_pressure):
@@ -464,15 +466,37 @@ with tabs[0]:
     # Add summary metrics above the chart
     st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
     total_processed = df_yes["seen1"].iloc[-1]
-    true_positives = df_yes["good"].iloc[-1]
-    false_positives = df_yes["bad"].iloc[-1]
-    col1, col2, col3 = st.columns(3)
+    step_tp = df_yes["seen1_g"].iloc[-1] - df_yes["FN1"].iloc[-1]
+    step_fp = df_yes["FP1"].iloc[-1]
+    step_fn = df_yes["FN1"].iloc[-1]
+    
+    # Check if capacity is exceeded and calculate lost candidates
+    capacity_exceeded = N > Cap1
+    lost_total = max(0, N - total_processed)
+    lost_good = lost_total * p_good if lost_total > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total processed (CV stage)", f"{total_processed:.0f}")
     with col2:
-        st.metric("True Positives (final)", f"{true_positives:.0f}")
+        st.metric("True Positives (CV)", f"{step_tp:.0f}")
     with col3:
-        st.metric("False Positives (final)", f"{false_positives:.0f}")
+        st.metric("False Positives (CV)", f"{step_fp:.0f}")
+    with col4:
+        if capacity_exceeded:
+            st.markdown(
+                f"""
+                <div style="background-color: #ff4444; padding: 10px; border-radius: 5px; border: 2px solid #cc0000;">
+                    <div style="color: white; font-weight: bold; font-size: 14px;">False Negatives (CV)</div>
+                    <div style="color: white; font-size: 24px; font-weight: bold;">{step_fn:.0f}</div>
+                    <div style="color: #ffcccc; font-size: 12px;">⚠️ {lost_good:.0f} potential TPs lost!</div>
+                </div>
+                """, 
+                unsafe_allow_html=True,
+                help=f"⚠️ Capacity exceeded! {lost_good:.0f} potential TP candidates lost due to capacity constraint ({lost_total:.0f} total candidates not processed)"
+            )
+        else:
+            st.metric("False Negatives (CV)", f"{step_fn:.0f}")
 
     fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
@@ -514,15 +538,42 @@ with tabs[0]:
 with tabs[1]:
     st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
     total_processed2 = df_yes["seen2"].iloc[-1]
-    true_positives2 = df_yes["good"].iloc[-1]
-    false_positives2 = df_yes["bad"].iloc[-1]
-    col1, col2, col3 = st.columns(3)
+    step_tp2 = df_yes["seen2_g"].iloc[-1] - df_yes["FN2"].iloc[-1]
+    step_fp2 = df_yes["FP2"].iloc[-1]
+    step_fn2 = df_yes["FN2"].iloc[-1]
+    
+    # Check if capacity is exceeded and calculate lost candidates
+    # For stage 2, input is tot1 (output from stage 1)
+    stage1_total_output = df_yes["tot1"].iloc[-1]
+    capacity_exceeded2 = stage1_total_output > Cap2
+    lost_total2 = max(0, stage1_total_output - total_processed2)
+    # Calculate good ratio from stage 1 output: (TP from stage 1) / (total output from stage 1)
+    stage1_tp = df_yes["seen1_g"].iloc[-1] - df_yes["FN1"].iloc[-1]
+    good_ratio_s1 = stage1_tp / stage1_total_output if stage1_total_output > 0 else 0
+    lost_good2 = lost_total2 * good_ratio_s1 if lost_total2 > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total processed (Tech stage)", f"{total_processed2:.0f}")
     with col2:
-        st.metric("True Positives (final)", f"{true_positives2:.0f}")
+        st.metric("True Positives (Tech)", f"{step_tp2:.0f}")
     with col3:
-        st.metric("False Positives (final)", f"{false_positives2:.0f}")
+        st.metric("False Positives (Tech)", f"{step_fp2:.0f}")
+    with col4:
+        if capacity_exceeded2:
+            st.markdown(
+                f"""
+                <div style="background-color: #ff4444; padding: 10px; border-radius: 5px; border: 2px solid #cc0000;">
+                    <div style="color: white; font-weight: bold; font-size: 14px;">False Negatives (Tech)</div>
+                    <div style="color: white; font-size: 24px; font-weight: bold;">{step_fn2:.0f}</div>
+                    <div style="color: #ffcccc; font-size: 12px;">⚠️ {lost_good2:.0f} potential TPs lost!</div>
+                </div>
+                """, 
+                unsafe_allow_html=True,
+                help=f"⚠️ Capacity exceeded! {lost_good2:.0f} potential TP candidates lost due to capacity constraint ({lost_total2:.0f} total candidates not processed)"
+            )
+        else:
+            st.metric("False Negatives (Tech)", f"{step_fn2:.0f}")
     fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
     util_act_s2  = df_yes["util2"].to_numpy()
@@ -561,15 +612,42 @@ with tabs[1]:
 with tabs[2]:
     st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
     total_processed3 = df_yes["seen3"].iloc[-1]
-    true_positives3 = df_yes["good"].iloc[-1]
-    false_positives3 = df_yes["bad"].iloc[-1]
-    col1, col2, col3 = st.columns(3)
+    step_tp3 = df_yes["seen3_g"].iloc[-1] - df_yes["FN3"].iloc[-1]
+    step_fp3 = df_yes["FP3"].iloc[-1]
+    step_fn3 = df_yes["FN3"].iloc[-1]
+    
+    # Check if capacity is exceeded and calculate lost candidates
+    # For stage 3, input is tot2 (output from stage 2)
+    stage2_total_output = df_yes["tot2"].iloc[-1]
+    capacity_exceeded3 = stage2_total_output > Cap3
+    lost_total3 = max(0, stage2_total_output - total_processed3)
+    # Calculate good ratio from stage 2 output: (TP from stage 2) / (total output from stage 2)
+    stage2_tp = df_yes["seen2_g"].iloc[-1] - df_yes["FN2"].iloc[-1]
+    good_ratio_s2 = stage2_tp / stage2_total_output if stage2_total_output > 0 else 0
+    lost_good3 = lost_total3 * good_ratio_s2 if lost_total3 > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total processed (HM stage)", f"{total_processed3:.0f}")
     with col2:
-        st.metric("True Positives (final)", f"{true_positives3:.0f}")
+        st.metric("True Positives (HM)", f"{step_tp3:.0f}")
     with col3:
-        st.metric("False Positives (final)", f"{false_positives3:.0f}")
+        st.metric("False Positives (HM)", f"{step_fp3:.0f}")
+    with col4:
+        if capacity_exceeded3:
+            st.markdown(
+                f"""
+                <div style="background-color: #ff4444; padding: 10px; border-radius: 5px; border: 2px solid #cc0000;">
+                    <div style="color: white; font-weight: bold; font-size: 14px;">False Negatives (HM)</div>
+                    <div style="color: white; font-size: 24px; font-weight: bold;">{step_fn3:.0f}</div>
+                    <div style="color: #ffcccc; font-size: 12px;">⚠️ {lost_good3:.0f} potential TPs lost!</div>
+                </div>
+                """, 
+                unsafe_allow_html=True,
+                help=f"⚠️ Capacity exceeded! {lost_good3:.0f} potential TP candidates lost due to capacity constraint ({lost_total3:.0f} total candidates not processed)"
+            )
+        else:
+            st.metric("False Negatives (HM)", f"{step_fn3:.0f}")
     fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
     util_act_s3  = df_yes["util3"].to_numpy()
