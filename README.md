@@ -1,7 +1,7 @@
 # Screening Simulation
 
-An interactive web simulator for multi-stage candidate screening processes.  
-Explore how **strictness**, **capacity limits**, and **accuracy trade-offs** shape your final hires, error rates, and mistake breakdowns.
+An interactive web simulator that models realistic multi-stage candidate screening processes (CV → Technical → Hiring Manager interviews).  
+Explore how **screening strictness**, **capacity bottlenecks**, **over-cautious behavior**, and **accuracy trade-offs** impact your final hiring outcomes, error rates, and where mistakes occur.
 
 🔗 Live demo: [https://screening-simulation.streamlit.app/](https://screening-simulation.streamlit.app/)
 
@@ -12,9 +12,10 @@ Explore how **strictness**, **capacity limits**, and **accuracy trade-offs** sha
 This tool helps hiring teams and data analysts understand:
 
 - How changing **screening strictness** shifts false positives (FP) vs false negatives (FN)  
-- How bottlenecks and capacity constraints degrade screening accuracy  
+- How capacity bottlenecks and overloaded interviewers degrade screening accuracy  
 - Where mistakes predominantly occur (CV review, technical interview, hiring manager step)  
 - The trade-offs between processing more candidates vs maintaining quality
+- The impact of **over-cautious** hiring behavior (avoiding bad hires at the cost of missing good candidates)
 
 ---
 
@@ -31,9 +32,10 @@ Each stage has:
 - **TPR** (True Positive Rate): probability a qualified candidate passes  
 - **TNR** (True Negative Rate): probability an unqualified candidate is correctly rejected  
 - **Capacity**: max number of candidates the stage can evaluate  
-- **Optional “pressure” effect**: if the stage is overloaded, TPR and TNR degrade
+- **Optional "pressure" effect**: if the stage is overloaded, TPR and TNR degrade
+- **Optional "over-cautious" behavior**: models FP-averse hiring where avoiding bad hires becomes the priority
 
-You pick a **strictness parameter**, which linearly interpolates between lenient vs strict endpoint accuracies for each stage.
+You pick a **strictness parameter**, which linearly interpolates between lenient vs strict endpoint accuracies for each stage. When over-cautious mode is enabled, higher strictness improves TNR (better at rejecting bad candidates) but penalizes TPR (worse at accepting good candidates), simulating risk-averse hiring behavior.
 
 ---
 
