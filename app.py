@@ -11,49 +11,70 @@ st.set_page_config(page_title="Screening Simulation", layout="wide")
 # =========================================================
 st.title("Candidates Screening Simulation")
 st.caption("Capacity-first pipeline with asymmetric strictness and capacity-pressure effects")
+st.info("💡 **Terminology Guide**: Hover over controls and metrics for explanations. **TP** = True Positives (correctly accepted qualified candidates), **FP** = False Positives (incorrectly accepted unqualified candidates), **FN** = False Negatives (incorrectly rejected qualified candidates), **TN** = True Negatives (correctly rejected unqualified candidates)")
 
 with st.sidebar:
     st.header("Inputs")
 
     # Base prevalence & pool size
-    p_good = st.slider("Prevalence of qualified (p_good)", 0.01, 0.80, 0.10, 0.01)
-    N = st.slider("Total candidates (N)", 100, 10000, 1000, 50)
+    p_good = st.slider("Prevalence of qualified (p_good)", 0.01, 0.80, 0.10, 0.01, 
+                       help="The proportion of candidates in the initial pool who are actually qualified/good. For example, 0.10 means 10% of all candidates are qualified.")
+    N = st.slider("Total candidates (N)", 100, 10000, 1000, 50,
+                  help="The total number of candidates entering the screening pipeline at the start.")
 
-    # Stage capacities
+    # Stage capacity limits
+    st.subheader("Stage capacity limits")
     c1, c2, c3 = st.columns(3)
-    Cap1 = c1.number_input("CV capacity", 1, 100000, 400, 1)
-    Cap2 = c2.number_input("Tech capacity", 1, 100000, 75, 1)
-    Cap3 = c3.number_input("HM capacity", 1, 100000, 25, 1)
+    with c1:
+        Cap1 = st.number_input("CV", 1, 100000, 400, 1,
+                               help="Maximum number of candidates that can be processed at the CV screening stage.")
+    with c2:
+        Cap2 = st.number_input("Tech", 1, 100000, 75, 1,
+                               help="Maximum number of candidates that can be processed at the Technical interview stage.")
+    with c3:
+        Cap3 = st.number_input("HM", 1, 100000, 25, 1,
+                               help="Maximum number of candidates that can be processed at the Hiring Manager interview stage.")
 
     # Strictness sweep
     st.subheader("Strictness sweep")
-    s_min, s_max = st.slider("Strictness range [lenient..strict]", 0.0, 1.0, (0.0, 1.0), 0.05)
-    s_step = st.number_input("Step", 0.01, 1.0, 0.05, 0.01)
+    s_min, s_max = st.slider("Strictness range [lenient..strict]", 0.0, 1.0, (0.0, 1.0), 0.05,
+                             help="Range of strictness values to simulate. 0.0 = most lenient (high TPR, low TNR), 1.0 = most strict (low TPR, high TNR). The simulation will test multiple strictness levels within this range.")
+    s_step = st.number_input("Step", 0.01, 1.0, 0.05, 0.01,
+                            help="Step size between strictness values. Smaller steps give more detailed results but take longer to compute.")
     s_values = np.round(np.arange(s_min, s_max + 1e-9, s_step), 4)
 
     # Capacity pressure
     st.subheader("Capacity pressure")
     use_pressure = st.toggle("Enable capacity-pressure effect", value=True)
-    u_thr = st.slider("u_thr (pressure starts)", 0.50, 1.00, 0.90, 0.01)
-    u_max = st.slider("u_max (pressure saturates)", 1.00, 2.00, 1.50, 0.01)
-    alpha_tpr = st.slider("α_TPR (max TPR drop)", 0.0, 0.8, 0.30, 0.01)
-    alpha_tnr = st.slider("α_TNR (max TNR drop)", 0.0, 0.8, 0.30, 0.01)
+    st.caption("ℹ️ When enabled, performance degrades as stage utilization increases above the threshold. This simulates real-world effects where overloaded interviewers make worse decisions.")
+    u_thr = st.slider("u_thr (pressure starts)", 0.50, 1.00, 0.90, 0.01,
+                     help="Utilization threshold where capacity pressure begins. Above this level, interviewer performance starts to degrade.")
+    u_max = st.slider("u_max (pressure saturates)", 1.00, 2.00, 1.50, 0.01,
+                     help="Utilization level where capacity pressure reaches maximum effect. Performance degradation plateaus at this point.")
+    alpha_tpr = st.slider("α_TPR (max TPR drop)", 0.0, 0.8, 0.30, 0.01,
+                         help="Maximum reduction in True Positive Rate (TPR) due to capacity pressure. TPR = correctly identifying qualified candidates.")
+    alpha_tnr = st.slider("α_TNR (max TNR drop)", 0.0, 0.8, 0.30, 0.01,
+                         help="Maximum reduction in True Negative Rate (TNR) due to capacity pressure. TNR = correctly rejecting unqualified candidates.")
 
     # Asymmetric strictness (FP-averse)
     st.subheader("Asymmetric strictness (FP-averse)")
     use_asym = st.toggle("Enable over-cautious strictness (TNR ↑; TPR capped/penalized)", value=True)
-    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 1.60, 0.05)
+    st.caption("ℹ️ When enabled, higher strictness increases TNR (better at rejecting bad candidates) but caps and penalizes TPR (worse at accepting good candidates). This simulates risk-averse hiring behavior.")
+    caution_k = st.slider("Over-cautiousness k (TPR penalty per unit TNR gain)", 0.0, 2.0, 2.0, 0.05,
+                         help="Controls how much TPR is penalized as TNR increases. Higher values mean more severe penalties for being overly cautious.")
 
     # FN–FP chart options (for pipeline view)
     st.subheader("FN–FP chart options")
     overload_stage = st.selectbox(
         "Overload segmentation stage (affects only Final FN–FP chart)",
         ["Stage1 (CV)", "Stage2 (Tech)", "Stage3 (HM)"],
-        index=1,
+        index=0,
+        help="Which stage's utilization to use for color-coding the final FN-FP trade-off chart. This helps visualize how capacity pressure at different stages affects overall outcomes."
     )
 
     # Stage endpoints (lenient → strict)
     st.subheader("TPR/TNR endpoints (lenient → strict)")
+    st.caption("💡 **TPR** = True Positive Rate (sensitivity): % of qualified candidates correctly accepted. **TNR** = True Negative Rate (specificity): % of unqualified candidates correctly rejected.")
     def rate_pair(label, tpr_len, tnr_len, tpr_str, tnr_str):
         c1,c2,c3,c4 = st.columns(4)
         tpr_len = c1.number_input(f"{label} TPR_len", 0.0, 1.0, tpr_len, 0.01, key=f"{label}_tprl")
@@ -183,10 +204,14 @@ df_yes = sweep(True) if use_pressure else df_no.copy()  # outcomes shown
 # =========================================================
 st.caption("**Note:** The numbers below are for the strictest setting (top strictness value).")
 k1,k2,k3,k4 = st.columns(4)
-with k1: st.metric("Good hires (s end, with pressure)", f"{df_yes['good'].iloc[-1]:.1f}")
-with k2: st.metric("Bad hires (s end, with pressure)",  f"{df_yes['bad'].iloc[-1]:.1f}")
-with k3: st.metric("Precision (s end, with pressure)",  f"{df_yes['precision'].iloc[-1]:.3f}")
-with k4: st.metric("TPR_final (1 - FN rate)",           f"{1-df_yes['fn_rate'].iloc[-1]:.3f}")
+with k1: st.metric("Good hires (s end, with pressure)", f"{df_yes['good'].iloc[-1]:.1f}",
+                  help="Number of qualified candidates successfully hired after passing through all screening stages.")
+with k2: st.metric("Bad hires (s end, with pressure)",  f"{df_yes['bad'].iloc[-1]:.1f}",
+                  help="Number of unqualified candidates incorrectly hired after passing through all screening stages (these are costly mistakes).")
+with k3: st.metric("Precision (s end, with pressure)",  f"{df_yes['precision'].iloc[-1]:.3f}",
+                  help="Precision = TP / (TP + FP). The proportion of hired candidates who are actually qualified. Higher is better (fewer bad hires).")
+with k4: st.metric("TPR_final (1 - FN rate)",           f"{1-df_yes['fn_rate'].iloc[-1]:.3f}",
+                  help="True Positive Rate (Sensitivity) = TP / (TP + FN). The proportion of qualified candidates who were successfully hired. Higher is better (fewer missed good candidates).")
 
 st.divider()
 
@@ -448,7 +473,9 @@ def plot_tradeoff_actual(
     ax.grid(True, alpha=0.3); ax.legend(loc="best")
 
 st.subheader("Per-stage FN–FP Trade-offs")
-rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True)
+st.caption("📊 **Stage Analysis**: Each tab shows the trade-off between False Negatives (missing good candidates) and False Positives (accepting bad candidates) at that specific screening stage. Red highlighting indicates when capacity constraints are causing candidate loss.")
+rate_basis = st.radio("View", ["Stage rates (per seen good/bad)", "Counts"], horizontal=True,
+                     help="**Rates**: Shows proportions relative to candidates seen at each stage. **Counts**: Shows absolute numbers of candidates.")
 
 tabs = st.tabs(["CV (Stage1)", "Tech (Stage2)", "HM (Stage3)", "Final"])
 
@@ -477,11 +504,14 @@ with tabs[0]:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total processed (CV stage)", f"{total_processed:.0f}")
+        st.metric("Total processed (CV stage)", f"{total_processed:.0f}",
+                 help="Number of candidates actually processed at the CV stage (limited by capacity).")
     with col2:
-        st.metric("True Positives (CV)", f"{step_tp:.0f}")
+        st.metric("True Positives (CV)", f"{step_tp:.0f}",
+                 help="Number of qualified candidates correctly accepted at the CV stage (good candidates passed through).")
     with col3:
-        st.metric("False Positives (CV)", f"{step_fp:.0f}")
+        st.metric("False Positives (CV)", f"{step_fp:.0f}",
+                 help="Number of unqualified candidates incorrectly accepted at the CV stage (bad candidates passed through).")
     with col4:
         if capacity_exceeded:
             st.markdown(
@@ -496,7 +526,8 @@ with tabs[0]:
                 help=f"⚠️ Capacity exceeded! {lost_good:.0f} potential TP candidates lost due to capacity constraint ({lost_total:.0f} total candidates not processed)"
             )
         else:
-            st.metric("False Negatives (CV)", f"{step_fn:.0f}")
+            st.metric("False Negatives (CV)", f"{step_fn:.0f}",
+                     help="Number of qualified candidates incorrectly rejected at the CV stage (good candidates filtered out).")
 
     fig_s1, ax_s1 = plt.subplots(figsize=(6,4))
     fp_rate_s1, fn_rate_s1, FP1, FN1 = stage_rates(df_yes, "seen1_g", "seen1_b", "FN1", "FP1")
@@ -554,11 +585,14 @@ with tabs[1]:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total processed (Tech stage)", f"{total_processed2:.0f}")
+        st.metric("Total processed (Tech stage)", f"{total_processed2:.0f}",
+                 help="Number of candidates actually processed at the Technical interview stage (limited by capacity).")
     with col2:
-        st.metric("True Positives (Tech)", f"{step_tp2:.0f}")
+        st.metric("True Positives (Tech)", f"{step_tp2:.0f}",
+                 help="Number of qualified candidates correctly accepted at the Technical interview stage.")
     with col3:
-        st.metric("False Positives (Tech)", f"{step_fp2:.0f}")
+        st.metric("False Positives (Tech)", f"{step_fp2:.0f}",
+                 help="Number of unqualified candidates incorrectly accepted at the Technical interview stage.")
     with col4:
         if capacity_exceeded2:
             st.markdown(
@@ -573,7 +607,8 @@ with tabs[1]:
                 help=f"⚠️ Capacity exceeded! {lost_good2:.0f} potential TP candidates lost due to capacity constraint ({lost_total2:.0f} total candidates not processed)"
             )
         else:
-            st.metric("False Negatives (Tech)", f"{step_fn2:.0f}")
+            st.metric("False Negatives (Tech)", f"{step_fn2:.0f}",
+                     help="Number of qualified candidates incorrectly rejected at the Technical interview stage.")
     fig_s2, ax_s2 = plt.subplots(figsize=(6,4))
     fp_rate_s2, fn_rate_s2, FP2, FN2 = stage_rates(df_yes, "seen2_g", "seen2_b", "FN2", "FP2")
     util_act_s2  = df_yes["util2"].to_numpy()
@@ -628,11 +663,14 @@ with tabs[2]:
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total processed (HM stage)", f"{total_processed3:.0f}")
+        st.metric("Total processed (HM stage)", f"{total_processed3:.0f}",
+                 help="Number of candidates actually processed at the Hiring Manager interview stage (limited by capacity).")
     with col2:
-        st.metric("True Positives (HM)", f"{step_tp3:.0f}")
+        st.metric("True Positives (HM)", f"{step_tp3:.0f}",
+                 help="Number of qualified candidates correctly accepted at the Hiring Manager interview stage.")
     with col3:
-        st.metric("False Positives (HM)", f"{step_fp3:.0f}")
+        st.metric("False Positives (HM)", f"{step_fp3:.0f}",
+                 help="Number of unqualified candidates incorrectly accepted at the Hiring Manager interview stage.")
     with col4:
         if capacity_exceeded3:
             st.markdown(
@@ -647,7 +685,8 @@ with tabs[2]:
                 help=f"⚠️ Capacity exceeded! {lost_good3:.0f} potential TP candidates lost due to capacity constraint ({lost_total3:.0f} total candidates not processed)"
             )
         else:
-            st.metric("False Negatives (HM)", f"{step_fn3:.0f}")
+            st.metric("False Negatives (HM)", f"{step_fn3:.0f}",
+                     help="Number of qualified candidates incorrectly rejected at the Hiring Manager interview stage.")
     fig_s3, ax_s3 = plt.subplots(figsize=(6,4))
     fp_rate_s3, fn_rate_s3, FP3, FN3 = stage_rates(df_yes, "seen3_g", "seen3_b", "FN3", "FP3")
     util_act_s3  = df_yes["util3"].to_numpy()
@@ -690,11 +729,14 @@ with tabs[3]:
     false_positivesf = df_yes["bad"].iloc[-1]
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Intake", f"{total_intake:.0f}")
+        st.metric("Total Intake", f"{total_intake:.0f}",
+                 help="Total number of candidates entering the entire screening pipeline.")
     with col2:
-        st.metric("True Positives (final)", f"{true_positivesf:.0f}")
+        st.metric("True Positives (final)", f"{true_positivesf:.0f}",
+                 help="Number of qualified candidates who successfully passed through all stages and were hired.")
     with col3:
-        st.metric("False Positives (final)", f"{false_positivesf:.0f}")
+        st.metric("False Positives (final)", f"{false_positivesf:.0f}",
+                 help="Number of unqualified candidates who incorrectly passed through all stages and were hired (bad hires).")
     fig_sf, ax_sf = plt.subplots(figsize=(6,4))
     FPf = df_yes["bad"].to_numpy()
     FNf = (N * p_good - df_yes["good"]).to_numpy()
