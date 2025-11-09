@@ -29,7 +29,7 @@ with st.sidebar:
         Cap1 = st.number_input("CV", 1, 100000, 400, 1,
                                help="Maximum number of candidates that can be processed at the CV screening stage.")
     with c2:
-        Cap2 = st.number_input("Tech", 1, 100000, 75, 1,
+        Cap2 = st.number_input("Tech", 1, 100000, 150, 1,
                                help="Maximum number of candidates that can be processed at the Technical interview stage.")
     with c3:
         Cap3 = st.number_input("HM", 1, 100000, 25, 1,
@@ -196,8 +196,17 @@ def sweep(with_pressure):
 # =========================================================
 # Run simulations
 # =========================================================
-df_no  = sweep(False)               # baseline (no pressure) — used for segmentation
-df_yes = sweep(True) if use_pressure else df_no.copy()  # outcomes shown
+# Save current settings
+current_use_asym = use_asym
+current_use_pressure = use_pressure
+
+# Baseline: run with no effects enabled (true baseline)
+use_asym = False
+df_no = sweep(False)  # baseline with no effects at all
+
+# Restore settings and run with effects enabled
+use_asym = current_use_asym
+df_yes = sweep(current_use_pressure)  # outcomes with current settings (asymmetric + pressure if enabled)
 
 # =========================================================
 # KPIs
@@ -218,15 +227,33 @@ st.divider()
 # =========================================================
 # Charts (two columns)
 # =========================================================
-st.subheader("Good & Bad Hires — Before vs After Pressure")
+# Determine chart title based on enabled effects
+if current_use_pressure and current_use_asym:
+    chart_title = "Good & Bad Hires — Before vs After Effects (Pressure + Asymmetric Strictness)"
+elif current_use_pressure:
+    chart_title = "Good & Bad Hires — Before vs After Capacity Pressure"
+elif current_use_asym:
+    chart_title = "Good & Bad Hires — Before vs After Asymmetric Strictness"
+else:
+    chart_title = "Good & Bad Hires"
+
+st.subheader(chart_title)
 fig, ax = plt.subplots(figsize=(10,5))
-# Always plot 'Before' lines with consistent style and color
-ax.plot(df_no["s"],  df_no["good"], label="Good (Before)", linestyle="--", color="#1f77b4")
-ax.plot(df_no["s"],  df_no["bad"],  label="Bad (Before)", linestyle="--", color="#d62728")
-# Only plot 'After' lines if pressure is enabled
-if use_pressure:
+
+# Check if any effect is enabled
+any_effect_enabled = current_use_pressure or current_use_asym
+
+if any_effect_enabled:
+    # Show both "Before" and "After" lines when any effect is enabled
+    ax.plot(df_no["s"],  df_no["good"], label="Good (Before)", linestyle="--", color="#1f77b4")
+    ax.plot(df_no["s"],  df_no["bad"],  label="Bad (Before)", linestyle="--", color="#d62728")
     ax.plot(df_yes["s"], df_yes["good"], label="Good (After)", linewidth=2, color="#1f77b4")
     ax.plot(df_yes["s"], df_yes["bad"],  label="Bad (After)",  linewidth=2, color="#d62728")
+else:
+    # Show only "Before" lines when no effects are enabled
+    ax.plot(df_no["s"],  df_no["good"], label="Good", linestyle="--", color="#1f77b4")
+    ax.plot(df_no["s"],  df_no["bad"],  label="Bad", linestyle="--", color="#d62728")
+
 ax.set_xlabel("Strictness s")
 ax.set_ylabel("Hires")
 ax.grid(True, alpha=0.3)
