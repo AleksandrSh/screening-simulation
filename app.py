@@ -754,7 +754,35 @@ with tabs[3]:
     total_intake = N
     true_positivesf = df_yes["good"].iloc[-1]
     false_positivesf = df_yes["bad"].iloc[-1]
-    col1, col2, col3 = st.columns(3)
+    false_negativesf = N * p_good - df_yes["good"].iloc[-1]
+    
+    # Check if capacity is exceeded at any stage
+    # Stage 1
+    capacity_exceeded_s1 = N > Cap1
+    lost_total_s1 = max(0, N - Cap1) if capacity_exceeded_s1 else 0
+    lost_good_s1 = lost_total_s1 * p_good if lost_total_s1 > 0 else 0
+    
+    # Stage 2
+    stage1_total_output = df_yes["tot1"].iloc[-1]
+    capacity_exceeded_s2 = stage1_total_output > Cap2
+    lost_total_s2 = max(0, stage1_total_output - Cap2) if capacity_exceeded_s2 else 0
+    stage1_tp = df_yes["seen1_g"].iloc[-1] - df_yes["FN1"].iloc[-1]
+    good_ratio_s1 = stage1_tp / stage1_total_output if stage1_total_output > 0 else 0
+    lost_good_s2 = lost_total_s2 * good_ratio_s1 if lost_total_s2 > 0 else 0
+    
+    # Stage 3
+    stage2_total_output = df_yes["tot2"].iloc[-1]
+    capacity_exceeded_s3 = stage2_total_output > Cap3
+    lost_total_s3 = max(0, stage2_total_output - Cap3) if capacity_exceeded_s3 else 0
+    stage2_tp = df_yes["seen2_g"].iloc[-1] - df_yes["FN2"].iloc[-1]
+    good_ratio_s2 = stage2_tp / stage2_total_output if stage2_total_output > 0 else 0
+    lost_good_s3 = lost_total_s3 * good_ratio_s2 if lost_total_s3 > 0 else 0
+    
+    # Total lost candidates across all stages
+    total_lost_good = lost_good_s1 + lost_good_s2 + lost_good_s3
+    capacity_exceeded_any = capacity_exceeded_s1 or capacity_exceeded_s2 or capacity_exceeded_s3
+    
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Intake", f"{total_intake:.0f}",
                  help="Total number of candidates entering the entire screening pipeline.")
@@ -764,6 +792,23 @@ with tabs[3]:
     with col3:
         st.metric("False Positives (final)", f"{false_positivesf:.0f}",
                  help="Number of unqualified candidates who incorrectly passed through all stages and were hired (bad hires).")
+    with col4:
+        if capacity_exceeded_any:
+            st.markdown(
+                f"""
+                <div style="background-color: #ff4444; padding: 10px; border-radius: 5px; border: 2px solid #cc0000;">
+                    <div style="color: white; font-weight: bold; font-size: 14px;">False Negatives (final)</div>
+                    <div style="color: white; font-size: 24px; font-weight: bold;">{false_negativesf:.0f}</div>
+                    <div style="color: #ffcccc; font-size: 12px;">⚠️ {total_lost_good:.0f} potential TPs lost!</div>
+                </div>
+                """, 
+                unsafe_allow_html=True,
+                help=f"⚠️ Capacity exceeded at one or more stages! {total_lost_good:.0f} potential TP candidates lost due to capacity constraints"
+            )
+        else:
+            st.metric("False Negatives (final)", f"{false_negativesf:.0f}",
+                     help="Number of qualified candidates who were incorrectly rejected somewhere in the pipeline (missed good candidates).")
+    
     fig_sf, ax_sf = plt.subplots(figsize=(6,4))
     FPf = df_yes["bad"].to_numpy()
     FNf = (N * p_good - df_yes["good"]).to_numpy()
