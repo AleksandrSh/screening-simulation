@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building Resilient Talent Engines</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate 50 */
+        }
+        .concept-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .concept-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        
+        <!-- Header & Hero Section -->
+        <header class="text-center mb-16">
+            <h1 class="text-5xl md:text-6xl font-extrabold text-blue-800 mb-4 tracking-tight">
+                Building Resilient Talent Engines
+            </h1>
+            <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">
+                Rethinking the Talent Pipeline: <span class="font-semibold text-gray-700">From Static Metrics to Systemic Stability</span>.
+            </p>
+        </header>
+
+        <!-- Capacity-Pressure Effect Summary -->
+        <section class="mb-20 bg-white shadow-xl rounded-2xl p-8 lg:p-12 border-t-4 border-blue-500">
+            <h2 class="text-3xl md:text-4xl font-bold text-blue-700 mb-6">The Capacity-Pressure Effect</h2>
+            <div class="space-y-6 text-lg">
+                <p>Your hiring quality is <span class="font-bold">not fixed</span>. It is a direct output of your operational capacity. Conventional models assume assessment accuracy is a static property, but it is a dynamic variable subject to real-world pressures.</p>
+                <p class="text-xl font-medium text-red-600 border-l-4 border-red-400 pl-4 py-2 bg-red-50 rounded-lg">
+                    <span class="font-extrabold">The Core Insight:</span> Overloaded interviewers make worse decisions. When workload passes a critical threshold ($\mathbf{u_{thr}}$), classification accuracy collapses, leading to systemic failure (saturation).
+                </p>
+                <p>Capacity is not a cost center; it is your primary quality control mechanism.</p>
+            </div>
+        </section>
+
+        <!-- Key Dynamic Forces -->
+        <section class="mb-20">
+            <h2 class="text-3xl font-bold text-gray-800 mb-10 text-center">Three Interconnected Dynamic Forces</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+
+                <!-- 1. Operational Physics: Capacity-Pressure -->
+                <div class="concept-card bg-white p-6 rounded-xl shadow-lg border-b-4 border-indigo-500">
+                    <div class="text-4xl mb-4 text-indigo-500">⚙️</div>
+                    <h3 class="text-2xl font-semibold mb-3">Operational Physics</h3>
+                    <p class="text-gray-600">The non-linear impact of Utilisation ($\mathbf{u}$) on decision quality. Quality is stable under sustainable load ($\mathbf{u < u_{thr}}$), but degrades rapidly when overloaded.</p>
+                </div>
+
+                <!-- 2. Pipeline Architecture: Cascading Failure -->
+                <div class="concept-card bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500">
+                    <div class="text-4xl mb-4 text-green-500">⛓️</div>
+                    <h3 class="text-2xl font-semibold mb-3">Cascading Failure</h3>
+                    <p class="text-gray-600">A capacity shortfall in an early, high-volume stage (like CV Screening) degrades its True Negative Rate (TNR), flooding downstream high-cost stages and causing a systemic quality collapse.</p>
+                </div>
+
+                <!-- 3. Policy & Behaviour: FP-Averse Policy -->
+                <div class="concept-card bg-white p-6 rounded-xl shadow-lg border-b-4 border-red-500">
+                    <div class="text-4xl mb-4 text-red-500">⚖️</div>
+                    <h3 class="text-2xl font-semibold mb-3">FP-Averse Policy (k-Factor)</h3>
+                    <p class="text-gray-600">Organizations often prioritize avoiding a Bad Hire (False Positive, FP) over missing Good Talent (False Negative, FN). The 'Over-cautiousness k' parameter models this intentional risk aversion.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Actionable Insights & Measurement Shift -->
+        <section class="mb-20">
+            <h2 class="text-3xl font-bold text-gray-800 mb-10 text-center">Four Actions for a High-Quality Pipeline</h2>
+            <div class="grid md:grid-cols-2 gap-10">
+                
+                <!-- Actions Block -->
+                <div class="space-y-6">
+                    <div class="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+                        <span class="text-2xl text-blue-600 flex-shrink-0">🛡️</span>
+                        <div>
+                            <h4 class="font-semibold text-lg text-blue-700">1. Define & Defend the Threshold</h4>
+                            <p class="text-gray-600">Actively manage capacity to keep utilisation below $\mathbf{u_{thr}}$. This is your non-negotiable quality buffer.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+                        <span class="text-2xl text-blue-600 flex-shrink-0">📈</span>
+                        <div>
+                            <h4 class="font-semibold text-lg text-blue-700">2. Invest Upstream</h4>
+                            <p class="text-gray-600">Adding capacity to early, high-volume stages (CV screening) yields the highest ROI by preventing cascading failures in expensive downstream stages.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+                        <span class="text-2xl text-blue-600 flex-shrink-0">📊</span>
+                        <div>
+                            <h4 class="font-semibold text-lg text-blue-700">3. Quantify Your Risk Appetite</h4>
+                            <p class="text-gray-600">Use the 'k'-factor for an explicit, data-driven conversation about the trade-off between bad hires (FP) and missed talent (FN).</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+                        <span class="text-2xl text-blue-600 flex-shrink-0">🔬</span>
+                        <div>
+                            <h4 class="font-semibold text-lg text-blue-700">4. Stress-Test Your Strategy</h4>
+                            <p class="text-gray-600">Use simulation to model the impact of demand spikes (e.g., what if $N$ doubles?) and validate capacity plans before a crisis hits.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Measurement Shift Block -->
+                <div class="bg-blue-100 p-6 rounded-xl shadow-inner flex flex-col justify-center">
+                    <h4 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2 border-blue-300">Stop Measuring the Past. Start Predicting Failure.</h4>
+                    <div class="space-y-4">
+                        <div class="p-3 bg-white rounded-lg shadow-md">
+                            <p class="text-xl font-bold text-red-600">Lagging Indicators (The Past)</p>
+                            <ul class="list-disc list-inside ml-4 text-gray-700">
+                                <li>Time-to-Hire</li>
+                                <li>Cost-per-Hire</li>
+                            </ul>
+                            <p class="text-sm italic mt-2 text-red-500">They tell you that quality has already dropped.</p>
+                        </div>
+                        <div class="p-3 bg-white rounded-lg shadow-md">
+                            <p class="text-xl font-bold text-green-600">Leading Indicator (The Future)</p>
+                            <ul class="list-disc list-inside ml-4 text-gray-700">
+                                <li>Stage Utilisation ($\mathbf{u}$)</li>
+                            </ul>
+                            <p class="text-sm italic mt-2 text-green-500">It warns you that quality is <span class="font-bold">about to drop</span>.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Resources & Links Section -->
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Resources & Simulation</h2>
+            
+            <!-- Links Grid -->
+            <div class="grid md:grid-cols-3 gap-6 mb-10">
+                <a href="https://screening-simulation.streamlit.app/" target="_blank" class="block p-6 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-lg transition duration-300 concept-card">
+                    <h3 class="text-2xl font-bold mb-2 flex items-center">
+                        <span class="mr-3">🚀</span> Live Simulation App
+                    </h3>
+                    <p class="text-sm opacity-90">Test strategies and stress-test your pipeline capacity in the interactive Streamlit application.</p>
+                    <p class="text-xs mt-2 underline">https://screening-simulation.streamlit.app/</p>
+                </a>
+
+                <a href="https://github.com/AleksandrSh/screening-simulation" target="_blank" class="block p-6 bg-gray-700 hover:bg-gray-800 text-white rounded-xl shadow-lg transition duration-300 concept-card">
+                    <h3 class="text-2xl font-bold mb-2 flex items-center">
+                        <span class="mr-3">💻</span> Code Repository
+                    </h3>
+                    <p class="text-sm opacity-90">Access the underlying Python code and model implementation on GitHub.</p>
+                    <p class="text-xs mt-2 underline">https://github.com/AleksandrSh/screening-simulation</p>
+                </a>
+                
+                <a href="https://www.youtube.com/watch?v=XGNSBn62QBI" target="_blank" class="block p-6 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg transition duration-300 concept-card">
+                    <h3 class="text-2xl font-bold mb-2 flex items-center">
+                        <span class="mr-3">🎬</span> Watch the Deep Dive
+                    </h3>
+                    <p class="text-sm opacity-90">View the original video presentation explaining the model in detail.</p>
+                    <p class="text-xs mt-2 underline">https://www.youtube.com/watch?v=XGNSBn62QBI</p>
+                </a>
+            </div>
+
+            <!-- YouTube Embed (Optional Deep Dive) -->
+            <div class="max-w-4xl mx-auto mt-12">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-4">Video Explanation</h3>
+                <div class="aspect-w-16 aspect-h-9 overflow-hidden rounded-xl shadow-2xl">
+                    <!-- Standard YouTube Embed Code using the video ID -->
+                    <iframe 
+                        width="100%" 
+                        height="450" 
+                        src="https://www.youtube.com/embed/XGNSBn62QBI" 
+                        title="YouTube video player" 
+                        frameborder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen
+                        class="rounded-xl"
+                    ></iframe>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 pt-8 border-t border-gray-200">
+            <p class="text-sm text-gray-500">
+                A strategic analysis of the Capacity-Constrained Screening Model. Content inspired by NotebookLM source documents.
+            </p>
+        </footer>
+
+    </div>
+</body>
+</html>
